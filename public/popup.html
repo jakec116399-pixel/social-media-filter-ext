@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Focus Feed</title>
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      body { width: 300px; padding: 16px; }
+      .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+      .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; }
+      .brand img { width: 22px; height: 22px; }
+      .switch { position: relative; width: 40px; height: 22px; }
+      .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+      .slider { position: absolute; inset: 0; border-radius: 999px; background: var(--border); transition: 150ms; cursor: pointer; }
+      .slider::after { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; border-radius: 50%; background: #fff; transition: 150ms; }
+      .switch input:checked + .slider { background: var(--accent); }
+      .switch input:checked + .slider::after { transform: translateX(18px); }
+      .switch input:focus-visible + .slider { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .big { font-size: 34px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+      .rows { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+      .rows li { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+      .footer { display: flex; gap: 8px; margin-top: 14px; }
+      .footer > * { flex: 1; justify-content: center; }
+      .off-note { display: none; margin-top: 8px; }
+      body.off .off-note { display: block; }
+      body.off .stats { opacity: 0.5; }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div class="brand"><img src="icons/icon32.png" alt="" />Focus Feed</div>
+      <label class="switch" title="Filtering on/off">
+        <input type="checkbox" id="enabled" aria-label="Filtering enabled" />
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="card stats">
+      <div class="big" id="hidden-count">0</div>
+      <p class="muted" id="sub">posts hidden today</p>
+      <ul class="rows" id="rows"></ul>
+    </div>
+    <p class="muted off-note">Filtering is paused.</p>
+    <div class="footer">
+      <button id="settings">Settings</button>
+      <a class="btn btn-primary" href="https://x.com/home" target="_blank">Open X</a>
+    </div>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

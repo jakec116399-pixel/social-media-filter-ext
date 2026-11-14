@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Home / X (test fixture)</title>
+<style>
+  body { margin: 0; background: #000; color: #e7e9ea; font: 15px/1.4 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { width: 600px; margin: 0 auto; border-left: 1px solid #2f3336; border-right: 1px solid #2f3336; min-height: 100vh; }
+  .tab { padding: 16px; font-weight: 700; border-bottom: 1px solid #2f3336; position: sticky; top: 0; background: rgba(0,0,0,.85); z-index: 2; }
+  article { display: block; padding: 12px 16px; border-bottom: 1px solid #2f3336; }
+  .head { display: flex; gap: 6px; align-items: baseline; }
+  .head a { color: #71767b; text-decoration: none; }
+  .head a.name { color: #e7e9ea; font-weight: 700; }
+  .wrap { display: flex; gap: 12px; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: #333; flex: none; }
+  [data-testid="tweetText"] { margin-top: 2px; white-space: pre-wrap; }
+  [data-testid="tweetPhoto"] img { margin-top: 10px; width: 100%; border-radius: 16px; border: 1px solid #2f3336; display: block; }
+  .actions { display: flex; justify-content: space-between; color: #71767b; font-size: 13px; margin-top: 10px; max-width: 420px; }
+</style>
+</head>
+<body>
+<main><div class="tab">For you</div><div id="timeline"></div></main>
+<script>
+  const POSTS = window.__POSTS__ || [];
+  let n = 0;
+  function add(p) {
+    n++;
+    const cell = document.createElement('div');
+    cell.setAttribute('data-testid', 'cellInnerDiv');
+    cell.innerHTML = `<article data-testid="tweet" role="article" tabindex="0"><div class="wrap"><div class="avatar"></div><div style="flex:1;min-width:0">
+      <div class="head" data-testid="User-Name"><a class="name" href="/${p.user}">${p.name}</a><a href="/${p.user}">@${p.user}</a> · <a href="/${p.user}/status/${1000 + n}"><time>${n}h</time></a></div>
+      ${p.text ? `<div data-testid="tweetText" lang="en"></div>` : ''}
+      ${p.img ? `<div data-testid="tweetPhoto"><img alt="Image" src="https://pbs.twimg.com/media/${p.img}?format=jpg&name=medium"></div>` : ''}
+      <div class="actions"><span>💬 ${n * 3}</span><span>🔁 ${n * 7}</span><span>♥ ${n * 31}</span><span>📊 ${n}K</span></div>
+    </div></div></article>`;
+    if (p.text) cell.querySelector('[data-testid="tweetText"]').textContent = p.text;
+    document.getElementById('timeline').append(cell);
+  }
+  // First batch immediately, the rest arrives later like infinite scroll.
+  POSTS.slice(0, 8).forEach(add);
+  setTimeout(() => POSTS.slice(8).forEach(add), 800);
+</script>
+</body>
+</html>
