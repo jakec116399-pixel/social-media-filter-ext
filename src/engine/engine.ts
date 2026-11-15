@@ -6,10 +6,12 @@ import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 import type { NSFWJS } from "nsfwjs/core";
 import { ext } from "../shared/ext";
 import { heuristicHits } from "../shared/heuristics";
+import { isVideoThumb, judgeImage, type ImageScore, type TextContext } from "../shared/imagePolicy";
 import {
   TextClassifier,
   decideText,
   decodePrecomputed,
+  topTopic,
   type PrecomputedFile,
   type TextScores,
 } from "../shared/textModel";
@@ -86,8 +88,8 @@ function getNsfw(): Promise<NSFWJS> {
   return nsfwModel;
 }
 
-/** Probability that an image is sexualised (Porn + Hentai + Sexy). */
-async function imageScore(url: string): Promise<number> {
+/** Explicit (Porn + Hentai) and suggestive ("Sexy") probabilities for an image. */
+async function imageScore(url: string): Promise<ImageScore> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`image ${res.status}`);
   const bitmap = await createImageBitmap(await res.blob());
@@ -95,13 +97,12 @@ async function imageScore(url: string): Promise<number> {
     const model = await getNsfw();
     const preds = await model.classify(bitmap as unknown as HTMLImageElement, 5);
     const p = (name: string) => preds.find((x) => x.className === name)?.probability ?? 0;
-    return p("Porn") + p("Hentai") + p("Sexy");
+    return { explicit: p("Porn") + p("Hentai"), sexy: p("Sexy"), video: isVideoThumb(url) };
   } finally {
     bitmap.close();
   }
 }
 
-const IMAGE_THRESHOLD: Record<Strictness, number> = { relaxed: 0.8, balanced: 0.6, strict: 0.4 };
 
 // ---- Caches ----
 class Lru<V> {
@@ -124,7 +125,7 @@ class Lru<V> {
   }
 }
 const textCache = new Lru<Promise<TextScores>>(3000);
-const imageCache = new Lru<Promise<number>>(3000);
+const imageCache = new Lru<Promise<ImageScore | undefined>>(3000);
 
 export async function classify(post: PostData, settings: Settings, examples: UserExamples): Promise<Verdict> {
   const t0 = performance.now();
@@ -139,13 +140,13 @@ export async function classify(post: PostData, settings: Settings, examples: Use
           post.imageUrls.slice(0, 4).map((u) => {
             let p = imageCache.get(u);
             if (!p) {
-              p = imageScore(u).catch(() => 0);
+              p = imageScore(u).catch(() => undefined);
               imageCache.set(u, p);
             }
             return p;
           }),
-        ).then((xs) => Math.max(...xs))
-      : Promise.resolve(undefined);
+        ).then((xs) => xs.filter((x): x is ImageScore => !!x))
+      : Promise.resolve([] as ImageScore[]);
 
   const words = post.text.trim().split(/\s+/).filter(Boolean).length;
   let text: TextScores | undefined;
@@ -161,7 +162,7 @@ export async function classify(post: PostData, settings: Settings, examples: Use
     }
     text = await p;
   }
-  const img = await imagesP;
+  const images = await imagesP;
   const ms = Math.round(performance.now() - t0);
 
   // Labels from the AI (topics + tones), keyword rules, and the image model.
@@ -169,9 +170,20 @@ export async function classify(post: PostData, settings: Settings, examples: Use
   const decision = text ? decideText(text, enabled, settings.strictness) : { labels: [], hiddenBy: [] };
   const labels: LabelId[] = [...decision.labels];
   const keep = text?.taught?.action === "keep";
+  const kw = keep ? [] : heuristicHits(post);
+  for (const h of kw) if (!labels.includes(h.category)) labels.push(h.category);
+
+  // Image verdict, using the text as context (see src/shared/imagePolicy.ts).
+  let context: TextContext = "unclear";
+  if (labels.includes("sexualised")) context = "sexual";
+  else if (text) {
+    const top = topTopic(text);
+    if (top !== "sexualised" && text.topic[top].lead >= 0.04 && text.topic[top].sim >= 0.3) context = "other-topic";
+  }
+  const imageHits = images.map((i) => judgeImage(i, settings.strictness, context));
+  const imageKind = imageHits.includes("explicit") ? "explicit" : imageHits.includes("suggestive") ? "suggestive" : undefined;
   if (!keep) {
-    for (const h of heuristicHits(post)) if (!labels.includes(h.category)) labels.push(h.category);
-    if (img !== undefined && img >= IMAGE_THRESHOLD[settings.strictness]) {
+    if (imageKind) {
       // Suggestive image: sexualised becomes the leading label.
       if (labels.includes("sexualised")) labels.splice(labels.indexOf("sexualised"), 1);
       labels.unshift("sexualised");
@@ -189,10 +201,13 @@ export async function classify(post: PostData, settings: Settings, examples: Use
     for (const [k, v] of Object.entries(text.tone)) if (v > 0) scores[k as Category] = round(v);
     if (text.goalRelevance !== undefined) scores.offgoal = round(text.goalRelevance);
   }
-  if (img !== undefined) scores.image = round(img);
+  if (images.length) {
+    scores.imageExplicit = round(Math.max(...images.map((i) => i.explicit)));
+    scores.imageSexy = round(Math.max(...images.map((i) => i.sexy)));
+  }
 
-  const suggestiveImage = img !== undefined && img >= IMAGE_THRESHOLD[settings.strictness];
-  const name = (h: Category) => (h === "sexualised" && suggestiveImage ? "Suggestive image" : labelName(h));
+  const imageName = imageKind === "explicit" ? "Explicit image" : "Suggestive image";
+  const name = (h: Category) => (h === "sexualised" && imageKind ? imageName : labelName(h));
   const reason = hiddenBy.map(name).join(" · ") + (text?.taught?.action === "hide" ? " (you taught this)" : "");
   return {
     hide: hiddenBy.length > 0,

@@ -79,7 +79,8 @@ async function verdictFor(post: PostData, s: Settings): Promise<Verdict> {
 
 /** Tooltip text explaining a decision ("Why was this hidden?"). */
 function explain(v: Verdict): string {
-  const name = (k: string) => (k === "image" ? "Suggestive image" : labelName(k as Category));
+  const IMG: Record<string, string> = { imageExplicit: "Image: explicit", imageSexy: "Image: suggestive" };
+  const name = (k: string) => IMG[k] ?? labelName(k as Category);
   const scores = Object.entries(v.scores)
     .filter(([, n]) => n !== undefined)
     .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))

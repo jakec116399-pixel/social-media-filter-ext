@@ -85,6 +85,19 @@ article[data-smf-style="blur"] .smf-show {
   border-color: rgba(255, 255, 255, 0.7);
 }
 
+/* X lays each post out as a horizontal flex row; let our bar/line wrap onto
+   their own full-width row underneath instead of sitting beside the post. */
+article[data-testid="tweet"][data-smf="revealed"],
+article[data-testid="tweet"][data-smf="hidden"] {
+  flex-wrap: wrap;
+}
+article[data-testid="tweet"] > .smf-note,
+article[data-testid="tweet"] > .smf-bar {
+  flex: 1 0 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* Feedback line on posts the user chose to show. Deliberately quiet. */
 .smf-note {
   display: flex;

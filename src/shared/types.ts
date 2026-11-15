@@ -169,8 +169,8 @@ export interface Verdict {
   category?: Category;
   /** Short human-readable reason. */
   reason?: string;
-  /** Category scores, plus `image` (sexualised-image probability) when images were checked. */
-  scores: Partial<Record<Category | "image", number>>;
+  /** Label scores, plus image-model scores (explicit, suggestive) when images were checked. */
+  scores: Partial<Record<Category | "imageExplicit" | "imageSexy", number>>;
   ms: number;
   /** Set when classification failed (e.g. models still loading). */
   error?: string;
@@ -191,7 +191,7 @@ export interface DecisionLog {
   hide: boolean;
   category?: Category;
   reason?: string;
-  scores: Partial<Record<Category | "image", number>>;
+  scores: Partial<Record<Category | "imageExplicit" | "imageSexy", number>>;
   overridden?: boolean;
   id: string;
 }

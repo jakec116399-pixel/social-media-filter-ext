@@ -7,7 +7,9 @@
   body { margin: 0; background: #000; color: #e7e9ea; font: 15px/1.4 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
   main { width: 600px; margin: 0 auto; border-left: 1px solid #2f3336; border-right: 1px solid #2f3336; min-height: 100vh; }
   .tab { padding: 16px; font-weight: 700; border-bottom: 1px solid #2f3336; position: sticky; top: 0; background: rgba(0,0,0,.85); z-index: 2; }
-  article { display: block; padding: 12px 16px; border-bottom: 1px solid #2f3336; }
+  /* Like real X: the article is a horizontal flex row with one content child. */
+  article { display: flex; flex-direction: row; border-bottom: 1px solid #2f3336; }
+  article > .wrap { flex: 1 1 auto; padding: 12px 16px; min-width: 0; }
   .head { display: flex; gap: 6px; align-items: baseline; }
   .head a { color: #71767b; text-decoration: none; }
   .head a.name { color: #e7e9ea; font-weight: 700; }

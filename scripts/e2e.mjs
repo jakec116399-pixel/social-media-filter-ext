@@ -132,6 +132,13 @@ console.log("  ✓ 'Show anyway' reveals a hidden post");
   const rev = r1.page.locator('article[data-smf="revealed"]').first();
   const noteText = await rev.locator(".smf-note-label").innerText();
   assert.match(noteText, /^Hidden as /);
+  // The line must sit underneath the post, full width (X lays posts out as rows).
+  const geo = await rev.evaluate((a) => {
+    const n = a.querySelector(".smf-note").getBoundingClientRect();
+    const c = a.querySelector(".wrap").getBoundingClientRect();
+    return { below: n.top >= c.bottom - 1, fullWidth: n.width >= a.getBoundingClientRect().width - 2 };
+  });
+  assert.ok(geo.below && geo.fullWidth, `feedback line should be below the post: ${JSON.stringify(geo)}`);
   if (screens) {
     await rev.screenshot({ path: join(outDir, "revealed-note.png") });
     await rev.locator(".smf-note-btn", { hasText: "✗" }).click();
