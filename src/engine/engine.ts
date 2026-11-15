@@ -5,8 +5,9 @@
 import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 import type { NSFWJS } from "nsfwjs/core";
 import { ext } from "../shared/ext";
+import { heuristicHits } from "../shared/heuristics";
 import { TextClassifier, decideText, type TextScores } from "../shared/textModel";
-import type { Category, PostData, Settings, Strictness, Verdict } from "../shared/types";
+import type { Category, PostData, Settings, Strictness, TopicCategory, UserExamples, Verdict } from "../shared/types";
 
 // ---- Text model ----
 let textClf: Promise<TextClassifier> | null = null;
@@ -105,7 +106,7 @@ class Lru<V> {
 const textCache = new Lru<Promise<TextScores>>(3000);
 const imageCache = new Lru<Promise<number>>(3000);
 
-export async function classify(post: PostData, settings: Settings): Promise<Verdict> {
+export async function classify(post: PostData, settings: Settings, examples: UserExamples): Promise<Verdict> {
   const t0 = performance.now();
   const scores: Verdict["scores"] = {};
   const c = settings.categories;
@@ -127,40 +128,71 @@ export async function classify(post: PostData, settings: Settings): Promise<Verd
       : Promise.resolve(undefined);
 
   const words = post.text.trim().split(/\s+/).filter(Boolean).length;
-  let textDecision: { category: Category; score: number } | undefined;
-  if (words > 0 && (c.sexualised || c.clickbait || c.politics || c.gossip || (c.offgoal && goals.length))) {
-    const key = `${goals.join("\n")}\u0000${post.text}`;
+  let text: TextScores | undefined;
+  if (words > 0) {
+    const clf = await getTextClassifier();
+    await clf.setUserExamples(examples);
+    const key = `${clf.examplesVersion.length}:${hashString(clf.examplesVersion)}\u0000${goals.join("\n")}\u0000${post.text}`;
     let p = textCache.get(key);
     if (!p) {
-      p = getTextClassifier().then((clf) => clf.score(post.text, goals));
+      p = clf.score(post.text, goals);
       textCache.set(key, p);
       p.catch(() => textCache.delete(key)); // don't cache failures
     }
-    const s = await p;
-    for (const [k, v] of Object.entries(s.margin)) scores[k as Category] = v;
-    if (s.goalRelevance !== undefined) scores.offgoal = s.goalRelevance;
-    // Too little text to judge relevance → don't hide as off-goal.
-    const enabled = { ...c, offgoal: c.offgoal && words >= 3 };
-    textDecision = decideText(s, enabled, settings.strictness);
+    text = await p;
+    for (const [k, v] of Object.entries(text.margin)) scores[k as Category] = round(v);
+    if (text.goalRelevance !== undefined) scores.offgoal = round(text.goalRelevance);
   }
 
   const img = await imagesP;
   const ms = Math.round(performance.now() - t0);
+  if (text?.taught?.action === "keep") return { hide: false, reason: "You taught: keep posts like this", scores, ms };
+
+  if (img !== undefined) scores.image = round(img);
   if (img !== undefined && img >= IMAGE_THRESHOLD[settings.strictness]) {
-    scores.sexualised = Math.max(scores.sexualised ?? 0, img);
     return { hide: true, category: "sexualised", reason: "Suggestive image", scores, ms };
   }
-  if (textDecision) {
-    const reasons: Record<Category, string> = {
-      sexualised: "Suggestive text",
-      clickbait: "Clickbait / vaguepost",
-      politics: "Politics",
-      gossip: "Celebrity / gossip",
-      offgoal: "Not related to your goals",
+  if (text?.taught?.action === "hide" && c[text.taught.category]) {
+    return {
+      hide: true,
+      category: text.taught.category,
+      reason: `${REASONS[text.taught.category]} (you taught this)`,
+      scores,
+      ms,
     };
-    return { hide: true, category: textDecision.category, reason: reasons[textDecision.category], scores, ms };
   }
+
+  // Keyword rules: instant, high-precision. If the AI is clearly more confident
+  // about a different enabled category, use that category instead.
+  const hit = heuristicHits(post).find((h) => c[h.category]);
+  const ai = text
+    ? decideText(text, { ...c, offgoal: c.offgoal && words >= 3 && goals.length > 0 }, settings.strictness)
+    : undefined;
+  if (hit) {
+    const kwMargin = text?.margin[hit.category as TopicCategory] ?? 0;
+    if (ai && ai.category !== "offgoal" && ai.category !== hit.category && ai.score > kwMargin + 0.05) {
+      return { hide: true, category: ai.category, reason: REASONS[ai.category], scores, ms };
+    }
+    return { hide: true, category: hit.category, reason: `${REASONS[hit.category]} (keywords)`, scores, ms };
+  }
+  if (ai) return { hide: true, category: ai.category, reason: REASONS[ai.category], scores, ms };
   return { hide: false, scores, ms };
+}
+
+const REASONS: Record<Category, string> = {
+  sexualised: "Suggestive",
+  clickbait: "Clickbait / vaguepost",
+  politics: "Politics",
+  gossip: "Celebrity / gossip",
+  offgoal: "Not related to your goals",
+};
+
+const round = (x: number) => Math.round(x * 100) / 100;
+
+function hashString(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  return h;
 }
 
 /** Start loading both models so the first posts are judged quickly. */

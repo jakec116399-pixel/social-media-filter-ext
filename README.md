@@ -12,7 +12,15 @@ It can hide one or more of the following:
 | **Celebrity & gossip** | Celebrity drama, relationships, influencer beef |
 | **Off-goal** | Anything not related to goals you choose (e.g. "Learning to code", "Fitness") |
 
-Hidden posts collapse to a small bar, or blur in place, with a **Show anyway** button.
+Hidden posts collapse to a small bar, or are covered in place, with a **Show anyway** button. Hover over the bar to see why a post was hidden.
+
+### Teach it
+
+Right-click any post → **Focus Feed** →
+- **Hide posts like this → (category)** for posts it missed.
+- **Don't hide posts like this** for posts it hid by mistake.
+
+It learns immediately, on your device. Similar posts follow your choice from then on, and your examples sharpen each category. The popup shows how many posts you've taught and can forget them. **Copy feedback report** copies recent decisions and their scores, which is useful for tuning the built-in thresholds.
 
 ## Try it
 
@@ -62,8 +70,8 @@ X page ──► content script ─── keyword rules (instant) ──► hide
 
 1. **Find posts.** `src/content/x-adapter.ts` knows X's page structure. When X changes its markup, this is the only file to update.
 2. **Blur while checking.** New posts are blurred until judged, so nothing flashes on screen.
-3. **Tier 1, keywords** (`src/shared/heuristics.ts`). Obvious cases are decided instantly.
-4. **Tier 2, text AI** (`src/shared/textModel.ts`). Zero-shot classification: each post is compared with example posts for each category and with neutral posts. Off-goal compares posts with your goals; preset goals come with example posts for better matching.
+3. **Keywords** (`src/shared/heuristics.ts`). High-precision rules for obvious cases.
+4. **Text AI** (`src/shared/textModel.ts`, examples in `src/shared/prototypes.ts`). Zero-shot classification. The post is cleaned (links, @mentions and hashtags removed), embedded, and compared with ~20 example posts per category and ~50 neutral posts, averaging the 3 closest matches. Long posts are also scored sentence by sentence. Off-goal compares posts with your goals; preset goals come with example posts. Your right-click examples are added to these sets.
 5. **Tier 3, image AI** (`src/offscreen/offscreen.ts`). For posts with images when *Sexualised* is on.
 6. **Cache.** Results are cached per post, text and image URL.
 
@@ -75,14 +83,17 @@ X page ──► content script ─── keyword rules (instant) ──► hide
 | `npm test` | Unit tests |
 | `npm run eval` | Text-filter accuracy on `tests/data/labeled-posts.json` (`-- --mistakes` lists errors) |
 | `npm run e2e` | Loads the Chrome build in Chromium against a mock X feed and checks which posts are hidden (`-- --screens` saves screenshots to `test-results/`) |
+| `npm run perf` | Scroll-performance test on a 150-post mock feed that changes constantly |
 | `npm run typecheck` | TypeScript check |
 
 ### Current accuracy (balanced setting)
 
-- Text eval set (84 posts): **98%** correct; off-goal 32/34.
-- End-to-end mock feed (12 unseen posts): 12/12 in all three scenarios.
+| Test set | Unwanted posts caught | Right category | Good posts wrongly hidden |
+|---|---|---|---|
+| `realistic-posts.json`: messy, real-looking posts, not used to write the examples | 28/34 | 27/28 | 2/24 |
+| `labeled-posts.json`: clean examples | 47/50 | 46/47 | 0/34 |
 
-These sets are small and hand-written, so treat them as a smoke test. Real-world accuracy will be lower. Collecting real mistakes from "Show anyway" clicks is the next step.
+v0.1 balanced caught 23/34 on the realistic set. Real feeds are harder than both sets, which is why teaching by right-click exists.
 
 ## Known limitations
 

@@ -29,6 +29,11 @@ export function smallImageUrl(src: string): string | null {
   }
 }
 
+/** Cheap id lookup (post permalink), used to skip posts that were already judged. */
+export function quickPostId(article: Element): string | null {
+  return article.querySelector('a[href*="/status/"] time')?.closest("a")?.getAttribute("href") ?? null;
+}
+
 export function extractPost(article: Element): PostData | null {
   const timeLink = article.querySelector('a[href*="/status/"] time')?.closest("a");
   const text = Array.from(article.querySelectorAll('[data-testid="tweetText"]')).map(textWithEmoji).join("\n").trim();

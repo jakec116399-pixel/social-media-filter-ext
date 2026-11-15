@@ -1,6 +1,6 @@
 import { ext } from "../shared/ext";
 import { getSettings, saveSettings } from "../shared/settings";
-import { CATEGORIES, type DayStats } from "../shared/types";
+import { CATEGORIES, type DayStats, type UserExamples } from "../shared/types";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -32,6 +32,24 @@ async function init() {
     }),
   );
   $("settings").addEventListener("click", () => ext.runtime.openOptionsPage());
+
+  const { examples } = (await ext.storage.local.get("examples")) as { examples?: UserExamples };
+  const n = (examples?.hide.length ?? 0) + (examples?.keep.length ?? 0);
+  if (n) {
+    $("taught").textContent = `Learned from ${n} post${n === 1 ? "" : "s"} you taught it (right-click a post → Focus Feed).`;
+    $("forget").hidden = false;
+  }
+  $("report").addEventListener("click", async () => {
+    const report: string = await ext.runtime.sendMessage({ type: "get-report" });
+    await navigator.clipboard.writeText(report);
+    $("copied").textContent = "Copied. Paste it to whoever is tuning the filter. It contains recent post text.";
+  });
+  $("forget").addEventListener("click", async () => {
+    if (!confirm("Forget every post you taught Focus Feed?")) return;
+    await ext.runtime.sendMessage({ type: "clear-learning" });
+    $("forget").hidden = true;
+    $("taught").textContent = "Forgotten. Right-click any post → Focus Feed to teach it again.";
+  });
 }
 
 void init();

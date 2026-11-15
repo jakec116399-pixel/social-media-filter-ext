@@ -33,6 +33,7 @@ const RULES: Rule[] = [
       "milf",
       "sext\\w*",
       "lewd",
+      "too (?:hot|spicy|naughty) for (?:here|this app|twitter|x)",
     ]),
   },
   {
@@ -176,6 +177,11 @@ export function heuristicHits(post: Pick<PostData, "text" | "hasLink" | "hasMedi
   const text = post.text.trim();
   for (const r of RULES) if (r.re.test(text)) hits.push({ category: r.category, reason: r.reason });
 
+  // Suggestive emoji plus creator-promo phrasing ("full set", "link in bio"...).
+  if (!hits.some((h) => h.category === "sexualised") && suggestiveSignals(text)) {
+    hits.unshift({ category: "sexualised", reason: "Suggestive post" });
+  }
+
   // Vagueposts: very short, no link or media, and no concrete information.
   if (!hits.some((h) => h.category === "clickbait") && isVaguepost(post)) {
     hits.push({ category: "clickbait", reason: "Vaguepost" });
@@ -194,4 +200,14 @@ export function isVaguepost(post: Pick<PostData, "text" | "hasLink" | "hasMedia"
   const letters = post.text.replace(/[^\p{L}]/gu, "").length;
   if (letters < 3) return true; // just emoji / punctuation
   return VAGUE_RE.test(post.text.trim()) && words.length <= 5;
+}
+
+const SUGGESTIVE_EMOJI = /😈|🍑|💦|🥵|😏|🔞|👅|🍆|🫦/gu;
+const PROMO_RE =
+  /\b(?:full (?:set|vid(?:eo)?)|unedited|uncensored|link in (?:my )?bio|on my (?:page|other account)|my (?:dms?|page)|subscribers?|exclusive content|private (?:pics|photos|content))\b/i;
+
+/** Two or more suggestive emoji, or one alongside creator-promo phrasing. */
+export function suggestiveSignals(text: string): boolean {
+  const n = text.match(SUGGESTIVE_EMOJI)?.length ?? 0;
+  return n >= 2 || (n >= 1 && PROMO_RE.test(text));
 }

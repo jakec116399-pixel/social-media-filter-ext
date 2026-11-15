@@ -1,6 +1,6 @@
 {
   "name": "social-media-filter-ext",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Browser extension that filters unwanted and off-goal posts from social media feeds using on-device AI.",
@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types tests/unit/*.test.ts",
     "eval": "node --experimental-strip-types scripts/eval-text.ts",
-    "e2e": "node scripts/e2e.mjs"
+    "e2e": "node scripts/e2e.mjs",
+    "perf": "node scripts/perf.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",

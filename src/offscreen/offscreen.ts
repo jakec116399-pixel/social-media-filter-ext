@@ -5,7 +5,7 @@ import type { Msg } from "../shared/types";
 
 ext.runtime.onMessage.addListener((msg: Msg, _sender, sendResponse) => {
   if (msg.type === "offscreen-classify") {
-    classify(msg.post, msg.settings)
+    classify(msg.post, msg.settings, msg.examples)
       .then(sendResponse)
       .catch((e) => sendResponse({ hide: false, scores: {}, ms: 0, error: String(e) }));
     return true;

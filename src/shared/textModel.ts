@@ -1,109 +1,44 @@
 // Tier 2: zero-shot text classification with sentence embeddings.
 //
-// Each category is described by a handful of example "prototype" posts. A post
-// is embedded once, compared (cosine similarity) against every prototype, and
-// its score for a category is how much closer it is to that category than to
-// ordinary, neutral posts. No training data or per-post API calls needed.
-import type { Category, Strictness } from "./types";
+// Each category is described by example posts (src/shared/prototypes.ts). A
+// post is cleaned, embedded, and compared (cosine similarity) with every
+// example. Its score for a category is how much closer it is to that
+// category's best matches than to ordinary, neutral posts. Long posts are also
+// scored sentence by sentence, so one political line in a long post counts.
+// No training data or per-post API calls needed.
+import { NEUTRAL, PROTOTYPES } from "./prototypes.ts";
+import type { Category, Strictness, TopicCategory, UserExamples } from "./types";
+
+export { NEUTRAL, PROTOTYPES };
 
 /** Returns L2-normalised embeddings, one per input text. */
 export type EmbedFn = (texts: string[]) => Promise<Float32Array[]>;
 
-type TopicCategory = Exclude<Category, "offgoal">;
-
-export const PROTOTYPES: Record<TopicCategory, string[]> = {
-  sexualised: [
-    "New spicy pics just dropped, link in my bio for the uncensored version",
-    "Feeling cute in my new bikini, rate me 1 to 10",
-    "She is so hot, look at that body",
-    "Subscribe to see my private photos",
-    "Explicit adult content, 18+ only",
-    "Thirst trap selfie in lingerie",
-    "Sexy model showing off her curves",
-    "Hot guys shirtless at the beach",
-  ],
-  clickbait: [
-    "You won't believe what happened next",
-    "This one trick will change your life, most people don't know it",
-    "Nobody is talking about this and it's insane",
-    "I can't believe some of you actually think this",
-    "Like and retweet if you agree",
-    "It's happening. You know who you are.",
-    "Some people really need to look in the mirror",
-    "Wow. Just wow. Speechless.",
-    "Unpopular opinion but somebody had to say it",
-    "Reply with your answer, only 1% get this right",
-    "BREAKING: something huge just happened, more soon",
-    "They don't want you to know this",
-  ],
-  politics: [
-    "The president signed a new executive order today",
-    "Democrats and Republicans are fighting over the new bill in Congress",
-    "Vote in the upcoming election, polls open tomorrow",
-    "The government's immigration policy is a disaster",
-    "The prime minister announced a new tax plan in parliament",
-    "Left wing and right wing politicians clash over the budget",
-    "The senator's campaign rally drew a huge crowd",
-    "This administration is destroying the country",
-    "Culture war debate about woke ideology",
-  ],
-  gossip: [
-    "The famous singer was spotted on a date with her new boyfriend",
-    "Celebrity couple confirms divorce after five years of marriage",
-    "The rapper just dissed his rival in a new diss track",
-    "Hollywood actress responds to cheating rumours",
-    "The influencer drama is getting out of hand",
-    "Reality TV star reveals secret pregnancy",
-    "Pop star's outfit at the awards show has fans talking",
-    "Inside the feud between the two famous YouTubers",
-  ],
-};
-
-/** Ordinary posts used as a baseline: a post must be closer to a category than to these. */
-export const NEUTRAL: string[] = [
-  "Here's a tutorial on how to build a REST API with Node.js",
-  "Just finished a 10k run, new personal best",
-  "Our startup just shipped a new feature, here's what we learned",
-  "Scientists discovered a new species of deep sea fish",
-  "Easy weeknight recipe: garlic butter pasta in 20 minutes",
-  "Thread on the lessons I learned from reading 50 books this year",
-  "Beautiful sunset over the mountains on today's hike",
-  "The new GPU benchmarks are out, here's how they compare",
-  "Looking for recommendations for a good project management tool",
-  "Happy birthday to my brother, love you man",
-  "The match last night was incredible, what a goal",
-  "Interest rates and what they mean for your savings",
-  "My cat knocked everything off the desk again",
-  "New paper on transformer architectures for protein folding",
-  "Tips for staying focused while working from home",
-  "Photos from my trip to Japan",
-];
+export type { TopicCategory };
+export const TOPIC_CATEGORIES = Object.keys(PROTOTYPES) as TopicCategory[];
 
 export interface Thresholds {
   /** Minimum (category similarity − neutral similarity) margin to hide. */
   margin: Record<TopicCategory, number>;
-  /** Also require at least this raw similarity to the category. */
-  minSim: Record<TopicCategory, number>;
   /** Off-goal: hide if relevance to every goal is below this. */
   goalRelevance: number;
 }
 
 // Calibrated on tests/data/labeled-posts.json with `npm run eval`.
+// Calibrated with `npm run eval -- --sweep`, mostly on tests/data/realistic-posts.json
+// (messy, real-looking posts that were not used to write the prototypes).
 export const THRESHOLDS: Record<Strictness, Thresholds> = {
   relaxed: {
-    margin: { sexualised: 0.14, clickbait: 0.16, politics: 0.14, gossip: 0.14 },
-    minSim: { sexualised: 0.3, clickbait: 0.3, politics: 0.3, gossip: 0.3 },
-    goalRelevance: 0.25,
+    margin: { sexualised: 0.12, clickbait: 0.1, politics: 0.1, gossip: 0.1 },
+    goalRelevance: 0.2,
   },
   balanced: {
-    margin: { sexualised: 0.1, clickbait: 0.11, politics: 0.1, gossip: 0.1 },
-    minSim: { sexualised: 0.25, clickbait: 0.25, politics: 0.25, gossip: 0.25 },
-    goalRelevance: 0.32,
+    margin: { sexualised: 0.08, clickbait: 0.06, politics: 0.06, gossip: 0.06 },
+    goalRelevance: 0.24,
   },
   strict: {
-    margin: { sexualised: 0.06, clickbait: 0.08, politics: 0.06, gossip: 0.06 },
-    minSim: { sexualised: 0.2, clickbait: 0.2, politics: 0.2, gossip: 0.2 },
-    goalRelevance: 0.38,
+    margin: { sexualised: 0.06, clickbait: 0.02, politics: 0.02, gossip: 0.02 },
+    goalRelevance: 0.28,
   },
 };
 
@@ -234,7 +169,36 @@ export function dot(a: Float32Array, b: Float32Array): number {
   return s;
 }
 
-const maxSim = (v: Float32Array, set: Float32Array[]) => set.reduce((m, p) => Math.max(m, dot(v, p)), -1);
+/** Mean of the k highest similarities: steadier than trusting the single closest example. */
+function topKSim(v: Float32Array, set: Float32Array[], k = 3): number {
+  const sims = set.map((p) => dot(v, p)).sort((a, b) => b - a);
+  const n = Math.min(k, sims.length);
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += sims[i];
+  return sum / n;
+}
+
+/** Strip the parts of real posts that confuse matching: links, @mentions, '#', X's "Show more". */
+export function cleanText(text: string): string {
+  return text
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|co|ly|gg|tv|me|app|dev)(?:\/\S*)?/gi, " ")
+    .replace(/(^|\s)@\w+/g, " ")
+    .replace(/#(\w+)/g, (_, tag: string) => tag.replace(/([a-z])([A-Z])/g, "$1 $2"))
+    .replace(/\bShow more\b/g, " ")
+    .replace(/…/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** The whole post, plus its individual sentences when it has several. */
+export function segments(clean: string): string[] {
+  const sentences = clean
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((x) => x.trim())
+    .filter((x) => x.split(/\s+/).length >= 4);
+  return sentences.length > 1 ? [clean, ...sentences.slice(0, 4)] : [clean];
+}
 
 /** Phrasings used to turn a short goal like "fitness" into something an embedding model matches well. */
 export function goalPhrasings(goal: string): string[] {
@@ -245,14 +209,21 @@ export function goalPhrasings(goal: string): string[] {
 export interface TextScores {
   /** Margin over neutral for each topic category (higher = more likely). */
   margin: Record<TopicCategory, number>;
-  sim: Record<TopicCategory, number>;
+  /** Near-duplicate of a post the user taught: hide (with category) or keep. */
+  taught?: { action: "hide"; category: TopicCategory } | { action: "keep" };
   /** Best similarity to any of the user's goals (undefined when no goals). */
   goalRelevance?: number;
 }
 
 export class TextClassifier {
+  private baseProto?: Record<TopicCategory, Float32Array[]>;
+  private baseNeutral?: Float32Array[];
   private protoVecs?: Record<TopicCategory, Float32Array[]>;
   private neutralVecs?: Float32Array[];
+  private userHide: { category: TopicCategory; v: Float32Array }[] = [];
+  private userKeep: Float32Array[] = [];
+  private exampleKey = "";
+  private embedCache = new Map<string, Float32Array>();
   private goalCache = new Map<string, Float32Array[]>();
 
   private embed: EmbedFn;
@@ -263,17 +234,44 @@ export class TextClassifier {
 
   async init(): Promise<void> {
     if (this.protoVecs) return;
-    const cats = Object.keys(PROTOTYPES) as TopicCategory[];
-    const all = cats.flatMap((c) => PROTOTYPES[c]);
+    const all = TOPIC_CATEGORIES.flatMap((c) => [...PROTOTYPES[c]]);
     const vecs = await this.embed([...all, ...NEUTRAL]);
     const out = {} as Record<TopicCategory, Float32Array[]>;
     let i = 0;
-    for (const c of cats) {
+    for (const c of TOPIC_CATEGORIES) {
       out[c] = vecs.slice(i, i + PROTOTYPES[c].length);
       i += PROTOTYPES[c].length;
     }
-    this.neutralVecs = vecs.slice(i);
-    this.protoVecs = out;
+    this.baseNeutral = this.neutralVecs = vecs.slice(i);
+    this.baseProto = this.protoVecs = out;
+  }
+
+  /** Version key for the current user examples (changes when they change). */
+  get examplesVersion(): string {
+    return this.exampleKey;
+  }
+
+  /** Add the user's taught examples to the category and neutral sets. */
+  async setUserExamples(ex: UserExamples): Promise<void> {
+    await this.init();
+    const key = JSON.stringify(ex);
+    if (key === this.exampleKey) return;
+    const texts = [...ex.hide.map((h) => cleanText(h.text)), ...ex.keep.map(cleanText)];
+    const missing = [...new Set(texts.filter((t) => t && !this.embedCache.has(t)))];
+    if (missing.length) {
+      const vecs = await this.embed(missing);
+      missing.forEach((t, i) => this.embedCache.set(t, vecs[i]));
+    }
+    const vec = (t: string) => this.embedCache.get(cleanText(t));
+    this.userHide = ex.hide.flatMap((h) => (vec(h.text) ? [{ category: h.category, v: vec(h.text)! }] : []));
+    this.userKeep = ex.keep.flatMap((t) => (vec(t) ? [vec(t)!] : []));
+    const proto = {} as Record<TopicCategory, Float32Array[]>;
+    for (const c of TOPIC_CATEGORIES) {
+      proto[c] = [...this.baseProto![c], ...this.userHide.filter((h) => h.category === c).map((h) => h.v)];
+    }
+    this.protoVecs = proto;
+    this.neutralVecs = [...this.baseNeutral!, ...this.userKeep];
+    this.exampleKey = key;
   }
 
   private async goalVecs(goals: string[]): Promise<Float32Array[]> {
@@ -288,17 +286,44 @@ export class TextClassifier {
 
   async score(text: string, goals: string[] = []): Promise<TextScores> {
     await this.init();
-    const [v] = await this.embed([text]);
-    const neutral = maxSim(v, this.neutralVecs!);
+    const clean = cleanText(text) || text;
+    const segs = segments(clean);
+    const vecs = await this.embed(segs);
     const margin = {} as Record<TopicCategory, number>;
-    const sim = {} as Record<TopicCategory, number>;
-    for (const c of Object.keys(this.protoVecs!) as TopicCategory[]) {
-      sim[c] = maxSim(v, this.protoVecs![c]);
-      margin[c] = sim[c] - neutral;
+    for (const c of TOPIC_CATEGORIES) margin[c] = -1;
+    for (const v of vecs) {
+      const neutral = topKSim(v, this.neutralVecs!);
+      for (const c of TOPIC_CATEGORIES) {
+        margin[c] = Math.max(margin[c], topKSim(v, this.protoVecs![c]) - neutral);
+      }
+    }
+    // A post very similar to one the user explicitly taught follows that choice.
+    let taught: TextScores["taught"];
+    const NEAR = 0.82;
+    for (const v of vecs.slice(0, 1)) {
+      let best = NEAR;
+      for (const h of this.userHide) {
+        const d = dot(v, h.v);
+        if (d >= best) {
+          best = d;
+          taught = { action: "hide", category: h.category };
+        }
+      }
+      for (const k of this.userKeep) {
+        const d = dot(v, k);
+        if (d >= best) {
+          best = d;
+          taught = { action: "keep" };
+        }
+      }
     }
     const cleanGoals = goals.map((g) => g.trim()).filter(Boolean);
-    const goalRelevance = cleanGoals.length ? maxSim(v, await this.goalVecs(cleanGoals)) : undefined;
-    return { margin, sim, goalRelevance };
+    let goalRelevance: number | undefined;
+    if (cleanGoals.length) {
+      const gv = await this.goalVecs(cleanGoals);
+      goalRelevance = Math.max(...vecs.map((v) => topKSim(v, gv, 2)));
+    }
+    return { margin, goalRelevance, taught };
   }
 }
 
@@ -309,17 +334,24 @@ export function decideText(
   strictness: Strictness,
 ): { category: Category; score: number } | undefined {
   const t = THRESHOLDS[strictness];
+  if (s.taught?.action === "keep") return undefined;
+  if (s.taught?.action === "hide" && enabled[s.taught.category]) return { category: s.taught.category, score: 1 };
+  // Among enabled categories that pass their threshold, pick the strongest match.
   let best: { category: Category; score: number } | undefined;
-  for (const c of Object.keys(s.margin) as TopicCategory[]) {
-    if (!enabled[c]) continue;
-    if (s.margin[c] >= t.margin[c] && s.sim[c] >= t.minSim[c]) {
-      const score = s.margin[c] - t.margin[c];
-      if (!best || score > best.score) best = { category: c, score };
-    }
+  for (const c of TOPIC_CATEGORIES) {
+    if (!enabled[c] || s.margin[c] < t.margin[c]) continue;
+    if (!best || s.margin[c] > best.score) best = { category: c, score: s.margin[c] };
   }
   if (best) return best;
   if (enabled.offgoal && s.goalRelevance !== undefined && s.goalRelevance < t.goalRelevance) {
     return { category: "offgoal", score: t.goalRelevance - s.goalRelevance };
   }
   return undefined;
+}
+
+/** The single most likely topic category (for explaining decisions). */
+export function topCategory(s: TextScores): { category: TopicCategory; margin: number } {
+  let best = TOPIC_CATEGORIES[0];
+  for (const c of TOPIC_CATEGORIES) if (s.margin[c] > s.margin[best]) best = c;
+  return { category: best, margin: s.margin[best] };
 }

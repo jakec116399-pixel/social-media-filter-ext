@@ -113,6 +113,30 @@ await r1.page.waitForTimeout(200);
 assert.equal(await r1.page.locator('article[data-smf="revealed"]').count(), 1, "Show anyway should reveal the post");
 console.log("  ✓ 'Show anyway' reveals a hidden post");
 
+// Teaching: right-click a hidden post → "Don't hide posts like this" must unhide it.
+{
+  const target = r1.page.locator('article[data-smf="hidden"]').nth(1);
+  const text = await target.locator('[data-testid="tweetText"]').innerText();
+  await target.dispatchEvent("contextmenu");
+  // Do what the context-menu handler does (Playwright can't click native menus).
+  const pageUrl = r1.page.url();
+  await sw.evaluate(async ({ url }) => {
+    const [tab] = await chrome.tabs.query({ url });
+    const post = await chrome.tabs.sendMessage(tab.id, { type: "feedback-collect" });
+    const { examples = { hide: [], keep: [] } } = await chrome.storage.local.get("examples");
+    examples.keep.push(post.text);
+    await chrome.storage.local.set({ examples });
+    await chrome.tabs.sendMessage(tab.id, { type: "rescan" });
+  }, { url: pageUrl });
+  await r1.page.waitForFunction(
+    (t) => [...document.querySelectorAll('article[data-testid="tweet"]')].some(
+      (a) => a.innerText.includes(t) && a.dataset.smf === "ok"),
+    text, { timeout: 15000 },
+  );
+  console.log(`  ✓ Teaching "don't hide posts like this" unhides: "${text.slice(0, 50)}"`);
+  await sw.evaluate(() => chrome.storage.local.remove("examples"));
+}
+
 // Image model latency, measured inside the extension's offscreen document.
 const bench = await sw.evaluate(async () => {
   const t = [];
@@ -122,6 +146,7 @@ const bench = await sw.evaluate(async () => {
       await chrome.runtime.sendMessage({
         type: "offscreen-classify",
         post: { id: `b${img}${i}`, author: "x", text: "", imageUrls: [`https://pbs.twimg.com/media/${img}?bench=${i}`], hasLink: false, hasMedia: true },
+        examples: { hide: [], keep: [] },
         settings: { enabled: true, strictness: "balanced", goals: [], allowAccounts: [], hideStyle: "collapse", onboarded: true, categories: { sexualised: true, clickbait: false, politics: false, gossip: false, offgoal: false } },
       });
       t.push(performance.now() - s);

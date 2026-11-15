@@ -35,9 +35,9 @@ async function sendToOffscreen<T>(msg: Msg): Promise<T> {
 }
 
 startBackground({
-  async classify(post, settings) {
+  async classify(post, settings, examples) {
     await ensureOffscreen();
-    return sendToOffscreen<Verdict>({ type: "offscreen-classify", post, settings });
+    return sendToOffscreen<Verdict>({ type: "offscreen-classify", post, settings, examples });
   },
   async warmup() {
     await ensureOffscreen();

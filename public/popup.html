@@ -24,6 +24,11 @@
       .off-note { display: none; margin-top: 8px; }
       body.off .off-note { display: block; }
       body.off .stats { opacity: 0.5; }
+      .learn { margin-top: 12px; font-size: 12.5px; }
+      .learn-actions { display: flex; gap: 12px; margin-top: 6px; flex-wrap: wrap; }
+      button.link { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 600; font-size: 12.5px; }
+      button.link:hover { text-decoration: underline; }
+      .copied { min-height: 1em; margin-top: 4px; color: var(--ok); }
     </style>
   </head>
   <body>
@@ -40,6 +45,14 @@
       <ul class="rows" id="rows"></ul>
     </div>
     <p class="muted off-note">Filtering is paused.</p>
+    <div class="learn">
+      <p class="muted" id="taught">Tip: right-click any post → <strong>Focus Feed</strong> to teach it what to hide.</p>
+      <div class="learn-actions">
+        <button id="report" class="link">Copy feedback report</button>
+        <button id="forget" class="link" hidden>Forget what I taught</button>
+      </div>
+      <p class="muted copied" id="copied" role="status"></p>
+    </div>
     <div class="footer">
       <button id="settings">Settings</button>
       <a class="btn btn-primary" href="https://x.com/home" target="_blank">Open X</a>
