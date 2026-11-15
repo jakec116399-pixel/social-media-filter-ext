@@ -96,3 +96,27 @@ test("engagement-bait puzzles", () => {
   assert.deepEqual(cats("Only 2% of people can find the mistake in this picture. Can you?"), ["engagementbait"]);
   assert.deepEqual(cats("Can you spot the cat in this photo?"), ["engagementbait"]);
 });
+
+test("trend formats", async () => {
+  const { trendFormat } = await import("../../src/shared/heuristics.ts");
+  const yes = [
+    "> be Lauren Tan\n> build Grok Bot\n> spend 6 months setting rules your AI can't break\n> ship 3,000 updates",
+    "POV: you just checked your bank account",
+    "nobody:\nme at 3am: let's learn Japanese",
+    "Me: I'll sleep early\nAlso me at 4am:",
+    "Tell me you're a designer without telling me you're a designer",
+    "How it started vs how it's going",
+    "The startup founder starter pack",
+    "Day 1 vs day 365 of the gym",
+  ];
+  for (const t of yes) assert.ok(trendFormat(t), t);
+  const no = [
+    "I'm 5 > 3 years into my career",
+    "My point of view on this is different",
+    "Nobody told me this job would be so fun",
+    "The meeting is at 3pm, me and Sam will present",
+    "Started the day with a run",
+  ];
+  for (const t of no) assert.equal(trendFormat(t), undefined, t);
+  assert.ok(cats("> be me\n> forget my keys again").includes("format"));
+});

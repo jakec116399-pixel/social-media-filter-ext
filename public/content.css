@@ -84,3 +84,43 @@ article[data-smf-style="blur"] .smf-show {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.7);
 }
+
+/* Feedback line on posts the user chose to show. Deliberately quiet. */
+.smf-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 0;
+  padding: 6px 16px 8px;
+  border-top: 1px dashed rgba(113, 118, 123, 0.35);
+  font: 400 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: rgb(113, 118, 123);
+  cursor: default;
+}
+.smf-note-label { cursor: help; }
+.smf-note-actions { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.smf-note-btn {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid rgba(113, 118, 123, 0.4);
+  border-radius: 999px;
+  padding: 1px 9px;
+  cursor: pointer;
+}
+.smf-note-btn:hover { color: #6366f1; border-color: #6366f1; }
+.smf-note-save { color: #6366f1; border-color: rgba(99, 102, 241, 0.6); }
+.smf-note-select {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid rgba(113, 118, 123, 0.4);
+  border-radius: 6px;
+  padding: 1px 4px;
+  max-width: 260px;
+}
+.smf-note-select option, .smf-note-select optgroup { color: #0f1419; background: #fff; }
+.smf-note-thanks { color: #10b981; }
+.smf-locked { font-size: 12px; opacity: 0.8; cursor: help; }

@@ -90,10 +90,15 @@ function renderRadios() {
       r.onchange = () => {
         (s as unknown as Record<string, string>)[name] = r.value;
         $("strict-hint").textContent = STRICT_HINTS[s.strictness];
+        $("lock-row").hidden = s.strictness !== "strict";
       };
     });
   }
   $("strict-hint").textContent = STRICT_HINTS[s.strictness];
+  $("lock-row").hidden = s.strictness !== "strict";
+  const lock = $<HTMLInputElement>("lock");
+  lock.checked = s.lockHidden;
+  lock.onchange = () => (s.lockHidden = lock.checked);
 }
 
 $("goal-form").addEventListener("submit", (e) => {

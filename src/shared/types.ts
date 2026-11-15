@@ -17,7 +17,7 @@ export type TopicId =
   | "personal"
   | "relationships"
   | "ads";
-export type ToneId = "ragebait" | "engagementbait" | "vaguepost" | "doom";
+export type ToneId = "ragebait" | "engagementbait" | "vaguepost" | "doom" | "format";
 export type LabelId = TopicId | ToneId;
 /** Anything that can hide a post: a label, or "off-goal" mode. */
 export type Category = LabelId | "offgoal";
@@ -95,6 +95,12 @@ export const LABELS: LabelDef[] = [
     label: "Doom & negativity",
     description: "Doomscrolling fuel: everything is collapsing",
   },
+  {
+    id: "format",
+    group: "tone",
+    label: "Trend formats",
+    description: 'Templated posts: "> be me" greentext, "POV:", "nobody: / me:", "tell me … without telling me"',
+  },
 ];
 
 export const LABEL_BY_ID = Object.fromEntries(LABELS.map((l) => [l.id, l])) as Record<LabelId, LabelDef>;
@@ -116,6 +122,8 @@ export interface Settings {
   goals: string[];
   strictness: Strictness;
   hideStyle: HideStyle;
+  /** Strict mode only: hidden posts can't be unhidden (no "Show anyway", no un-teaching). */
+  lockHidden: boolean;
   /** Lower-case handles (without @) whose posts are never filtered. */
   allowAccounts: string[];
 }
@@ -134,8 +142,12 @@ export const DEFAULT_SETTINGS: Settings = {
   goals: [],
   strictness: "balanced",
   hideStyle: "collapse",
+  lockHidden: false,
   allowAccounts: [],
 };
+
+/** Whether hidden posts are locked (lock only applies in strict mode). */
+export const isLocked = (s: Settings) => s.lockHidden && s.strictness === "strict";
 
 /** What the content script extracts from one post. */
 export interface PostData {
@@ -194,6 +206,7 @@ export type Msg =
   | { type: "get-report" }
   | { type: "clear-learning" }
   | { type: "feedback-collect" }
+  | { type: "teach"; post: PostData; action: "hide" | "keep"; label?: LabelId; enable?: boolean }
   | { type: "rescan" }
   | { type: "warmup" };
 

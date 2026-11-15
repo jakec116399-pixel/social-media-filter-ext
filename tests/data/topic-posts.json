@@ -1,99 +1,503 @@
 {
-  "_note": "Realistic posts across every topic, including look-alikes (sports vs gossip, news vs politics, money vs ads). Not used to write the example posts. topic = expected topic ('any' = no clear topic), tones = expected tones.",
-  "goals": ["Learning to code", "Fitness & strength"],
-  "posts": [
-    { "topic": "politics", "tones": [], "text": "Parliament votes tomorrow on the new housing bill. My local MP still hasn't said which way she'll vote." },
-    { "topic": "politics", "tones": ["ragebait"], "text": "Every single politician in that party should be ashamed. They sold out the working class for donor money and you all clapped." },
-    { "topic": "politics", "tones": [], "text": "Early voting turnout is up 20% compared to the last midterms according to the state election office" },
-    { "topic": "politics", "tones": [], "text": "The chancellor's budget includes a freeze on fuel duty and a rise in the minimum wage" },
-    { "topic": "politics", "tones": ["ragebait"], "text": "If you voted for this clown you don't get to complain about prices anymore. You did this." },
-
-    { "topic": "news", "tones": [], "text": "Heavy snow has closed the motorway in both directions, drivers advised not to travel tonight" },
-    { "topic": "news", "tones": [], "text": "Firefighters have contained the warehouse fire, no injuries reported" },
-    { "topic": "news", "tones": [], "text": "UPDATE: The missing 7-year-old has been found safe, police thank the public for sharing" },
-    { "topic": "news", "tones": [], "text": "A cargo ship has run aground in the canal, blocking traffic for the second day" },
-    { "topic": "news", "tones": ["doom"], "text": "Another mass layoff, another factory closing. This town is dying and no one is coming to save it." },
-
-    { "topic": "gossip", "tones": [], "text": "the way she wore his jersey to the game right after the breakup rumours 👀 that's a statement" },
-    { "topic": "gossip", "tones": [], "text": "Apparently the whole band hasn't spoken to the lead singer since the wedding drama" },
-    { "topic": "gossip", "tones": [], "text": "This influencer charging fans $200 for a meet and greet and then showing up 3 hours late is insane" },
-    { "topic": "gossip", "tones": [], "text": "she deleted every photo with him off her instagram last night... it's over isn't it" },
-    { "topic": "gossip", "tones": [], "text": "The actor finally addressed the feud with his former co-star in a new interview" },
-
-    { "topic": "sports", "tones": [], "text": "Can't believe we bottled a 3 goal lead at home. Defending was shocking all second half" },
-    { "topic": "sports", "tones": [], "text": "Transfer news: the club has agreed a fee for the winger, medical scheduled for Monday" },
-    { "topic": "sports", "tones": [], "text": "LeBron with 40 points tonight at 41 years old, ridiculous" },
-    { "topic": "sports", "tones": [], "text": "Hamilton P3 after starting 12th, what a drive in the rain" },
-    { "topic": "sports", "tones": ["ragebait"], "text": "If you still think he's better than Messi you never watched football. Simple." },
-
-    { "topic": "entertainment", "tones": [], "text": "Season 3 was a massive step down. The writers clearly had no idea how to end it." },
-    { "topic": "entertainment", "tones": [], "text": "Just got tickets for their stadium tour in June!! 🎶" },
-    { "topic": "entertainment", "tones": [], "text": "This indie game has better writing than most AAA releases, highly recommend" },
-    { "topic": "entertainment", "tones": [], "text": "The soundtrack for this film is absolutely haunting, been listening on repeat" },
-    { "topic": "entertainment", "tones": [], "text": "Dune Part Three trailer just dropped and the visuals are unreal" },
-
-    { "topic": "memes", "tones": [], "text": "me at 2am remembering something embarrassing I said in 2014" },
-    { "topic": "memes", "tones": [], "text": "my last two brain cells fighting for third place 🧠" },
-    { "topic": "memes", "tones": [], "text": "nobody:\nme explaining my whole life story to the uber driver" },
-    { "topic": "memes", "tones": [], "text": "why do I feel personally attacked by this 😭" },
-    { "topic": "memes", "tones": [], "text": "the dog looking at me like I'm the problem 💀" },
-
-    { "topic": "money", "tones": [], "text": "ETH flipping 5k this week? Charts looking very bullish 📈" },
-    { "topic": "money", "tones": ["engagementbait"], "text": "I went from broke to $10k/month in 6 months. Reply 'GUIDE' and I'll send you the exact system" },
-    { "topic": "money", "tones": [], "text": "Day trading is just gambling with extra steps. Lost 40% this month lol" },
-    { "topic": "money", "tones": [], "text": "This memecoin is the next 1000x, dev is based, LFG 🚀" },
-    { "topic": "money", "tones": [], "text": "If you're 22 with $5k saved, here's how I'd invest it" },
-
-    { "topic": "tech", "tones": [], "text": "The new open weights model runs locally on a laptop and beats last year's frontier models on coding" },
-    { "topic": "tech", "tones": [], "text": "Researchers just mapped the entire brain of a fruit fly, every single neuron" },
-    { "topic": "tech", "tones": [], "text": "Starship completed its first full orbit and the booster was caught by the tower again" },
-    { "topic": "tech", "tones": [], "text": "The new MacBook battery life is honestly ridiculous, 22 hours in my testing" },
-    { "topic": "tech", "tones": ["doom"], "text": "AI will replace every junior developer within two years and nobody is prepared for what comes next" },
-
-    { "topic": "learning", "tones": [], "text": "Spaced repetition changed how I study. Here's my Anki setup for med school 🧵" },
-    { "topic": "learning", "tones": [], "text": "Free Harvard CS50 course is still the best intro to programming out there" },
-    { "topic": "learning", "tones": [], "text": "How I finally understood linear algebra: 3Blue1Brown + doing problems by hand" },
-    { "topic": "learning", "tones": [], "text": "TIL you can press Ctrl+Shift+T to reopen a closed browser tab" },
-    { "topic": "learning", "tones": [], "text": "Writing tip: cut every sentence that doesn't add anything new" },
-
-    { "topic": "fitness", "tones": [], "text": "Zone 2 cardio 3x a week and my resting heart rate dropped by 8 bpm" },
-    { "topic": "fitness", "tones": [], "text": "First pull up ever today at 34. Took me 4 months of negatives 💪" },
-    { "topic": "fitness", "tones": [], "text": "Creatine is the most researched supplement there is, just take it" },
-    { "topic": "fitness", "tones": [], "text": "Ran my first half marathon this morning, 1:52, legs are jelly" },
-    { "topic": "fitness", "tones": [], "text": "Stretch your hip flexors if you sit all day, your lower back will thank you" },
-
-    { "topic": "lifestyle", "tones": [], "text": "Spent the weekend in the Lake District, the walk up to Catbells was stunning" },
-    { "topic": "lifestyle", "tones": [], "text": "One pot chickpea curry, ready in 25 minutes, recipe below 🍛" },
-    { "topic": "lifestyle", "tones": [], "text": "Finally finished painting the living room, went with a deep green and I love it" },
-    { "topic": "lifestyle", "tones": [], "text": "Found the best pastel de nata in Lisbon, tiny bakery near the river" },
-    { "topic": "lifestyle", "tones": [], "text": "My capsule wardrobe for autumn: 12 pieces, 30 outfits" },
-
-    { "topic": "personal", "tones": [], "text": "My daughter lost her first tooth today and was more excited about the tooth fairy than anything" },
-    { "topic": "personal", "tones": [], "text": "Passed my driving test on the third try!! 🚗" },
-    { "topic": "personal", "tones": [], "text": "Rough week. Grateful for friends who check in." },
-    { "topic": "personal", "tones": [], "text": "Our cat brought a live frog into the kitchen at 6am. Chaos." },
-    { "topic": "personal", "tones": [], "text": "Moved into our first house today, still can't quite believe it" },
-
-    { "topic": "relationships", "tones": [], "text": "Women: he should pay on the first date. Also women: I'm independent. Pick one." },
-    { "topic": "relationships", "tones": [], "text": "If your man doesn't post you, he's hiding you. Period." },
-    { "topic": "relationships", "tones": [], "text": "Men really think going on one date means you're exclusive 💀" },
-    { "topic": "relationships", "tones": [], "text": "Is it weird that my boyfriend still follows his ex on everything?" },
-    { "topic": "relationships", "tones": [], "text": "The talking stage is the worst part of modern dating, nobody commits to anything" },
-
-    { "topic": "ads", "tones": [], "text": "Our biggest sale of the year starts NOW. 40% off everything until Sunday 🛍️" },
-    { "topic": "ads", "tones": ["engagementbait"], "text": "🎁 GIVEAWAY 🎁 We're giving away 3 pairs of headphones! Follow + RT + tag 2 friends to enter" },
-    { "topic": "ads", "tones": [], "text": "Introducing our new protein bar: 20g protein, 2g sugar. Available in stores now" },
-    { "topic": "ads", "tones": [], "text": "Join 50,000 marketers getting our free weekly newsletter, link in bio" },
-    { "topic": "ads", "tones": [], "text": "Sponsored: Try the meal kit everyone's talking about, first box half price" },
-
-    { "topic": "sexualised", "tones": [], "text": "late night selfies hit different 😏 more on my page" },
-    { "topic": "sexualised", "tones": [], "text": "rate this fit 1-10 🍑 be honest" },
-    { "topic": "sexualised", "tones": [], "text": "new set dropping tonight, subscribers get it first 🔥😈" },
-
-    { "topic": "any", "tones": ["vaguepost"], "text": "some people never change lol" },
-    { "topic": "any", "tones": ["vaguepost"], "text": "I'm so tired of pretending" },
-    { "topic": "any", "tones": ["engagementbait"], "text": "Say something nice to the next person who replies to this 💛" },
-    { "topic": "any", "tones": ["doom"], "text": "Rent is half my salary and it'll be more next year. There's no way out of this." },
-    { "topic": "any", "tones": ["ragebait"], "text": "People who put their phone on speaker in public deserve to be fined, no exceptions" }
-  ]
+ "_note": "Realistic posts across every topic, including look-alikes (sports vs gossip, news vs politics, money vs ads). Not used to write the example posts. topic = expected topic ('any' = no clear topic), tones = expected tones.",
+ "goals": [
+  "Learning to code",
+  "Fitness & strength"
+ ],
+ "posts": [
+  {
+   "topic": "politics",
+   "tones": [],
+   "text": "Parliament votes tomorrow on the new housing bill. My local MP still hasn't said which way she'll vote."
+  },
+  {
+   "topic": "politics",
+   "tones": [
+    "ragebait"
+   ],
+   "text": "Every single politician in that party should be ashamed. They sold out the working class for donor money and you all clapped."
+  },
+  {
+   "topic": "politics",
+   "tones": [],
+   "text": "Early voting turnout is up 20% compared to the last midterms according to the state election office"
+  },
+  {
+   "topic": "politics",
+   "tones": [],
+   "text": "The chancellor's budget includes a freeze on fuel duty and a rise in the minimum wage"
+  },
+  {
+   "topic": "politics",
+   "tones": [
+    "ragebait"
+   ],
+   "text": "If you voted for this clown you don't get to complain about prices anymore. You did this."
+  },
+  {
+   "topic": "news",
+   "tones": [],
+   "text": "Heavy snow has closed the motorway in both directions, drivers advised not to travel tonight"
+  },
+  {
+   "topic": "news",
+   "tones": [],
+   "text": "Firefighters have contained the warehouse fire, no injuries reported"
+  },
+  {
+   "topic": "news",
+   "tones": [],
+   "text": "UPDATE: The missing 7-year-old has been found safe, police thank the public for sharing"
+  },
+  {
+   "topic": "news",
+   "tones": [],
+   "text": "A cargo ship has run aground in the canal, blocking traffic for the second day"
+  },
+  {
+   "topic": "news",
+   "tones": [
+    "doom"
+   ],
+   "text": "Another mass layoff, another factory closing. This town is dying and no one is coming to save it."
+  },
+  {
+   "topic": "gossip",
+   "tones": [],
+   "text": "the way she wore his jersey to the game right after the breakup rumours 👀 that's a statement"
+  },
+  {
+   "topic": "gossip",
+   "tones": [],
+   "text": "Apparently the whole band hasn't spoken to the lead singer since the wedding drama"
+  },
+  {
+   "topic": "gossip",
+   "tones": [],
+   "text": "This influencer charging fans $200 for a meet and greet and then showing up 3 hours late is insane"
+  },
+  {
+   "topic": "gossip",
+   "tones": [],
+   "text": "she deleted every photo with him off her instagram last night... it's over isn't it"
+  },
+  {
+   "topic": "gossip",
+   "tones": [],
+   "text": "The actor finally addressed the feud with his former co-star in a new interview"
+  },
+  {
+   "topic": "sports",
+   "tones": [],
+   "text": "Can't believe we bottled a 3 goal lead at home. Defending was shocking all second half"
+  },
+  {
+   "topic": "sports",
+   "tones": [],
+   "text": "Transfer news: the club has agreed a fee for the winger, medical scheduled for Monday"
+  },
+  {
+   "topic": "sports",
+   "tones": [],
+   "text": "LeBron with 40 points tonight at 41 years old, ridiculous"
+  },
+  {
+   "topic": "sports",
+   "tones": [],
+   "text": "Hamilton P3 after starting 12th, what a drive in the rain"
+  },
+  {
+   "topic": "sports",
+   "tones": [
+    "ragebait"
+   ],
+   "text": "If you still think he's better than Messi you never watched football. Simple."
+  },
+  {
+   "topic": "entertainment",
+   "tones": [],
+   "text": "Season 3 was a massive step down. The writers clearly had no idea how to end it."
+  },
+  {
+   "topic": "entertainment",
+   "tones": [],
+   "text": "Just got tickets for their stadium tour in June!! 🎶"
+  },
+  {
+   "topic": "entertainment",
+   "tones": [],
+   "text": "This indie game has better writing than most AAA releases, highly recommend"
+  },
+  {
+   "topic": "entertainment",
+   "tones": [],
+   "text": "The soundtrack for this film is absolutely haunting, been listening on repeat"
+  },
+  {
+   "topic": "entertainment",
+   "tones": [],
+   "text": "Dune Part Three trailer just dropped and the visuals are unreal"
+  },
+  {
+   "topic": "memes",
+   "tones": [],
+   "text": "me at 2am remembering something embarrassing I said in 2014"
+  },
+  {
+   "topic": "memes",
+   "tones": [],
+   "text": "my last two brain cells fighting for third place 🧠"
+  },
+  {
+   "topic": "memes",
+   "tones": [
+    "format"
+   ],
+   "text": "nobody:\nme explaining my whole life story to the uber driver"
+  },
+  {
+   "topic": "memes",
+   "tones": [],
+   "text": "why do I feel personally attacked by this 😭"
+  },
+  {
+   "topic": "memes",
+   "tones": [],
+   "text": "the dog looking at me like I'm the problem 💀"
+  },
+  {
+   "topic": "money",
+   "tones": [],
+   "text": "ETH flipping 5k this week? Charts looking very bullish 📈"
+  },
+  {
+   "topic": "money",
+   "tones": [
+    "engagementbait"
+   ],
+   "text": "I went from broke to $10k/month in 6 months. Reply 'GUIDE' and I'll send you the exact system"
+  },
+  {
+   "topic": "money",
+   "tones": [],
+   "text": "Day trading is just gambling with extra steps. Lost 40% this month lol"
+  },
+  {
+   "topic": "money",
+   "tones": [],
+   "text": "This memecoin is the next 1000x, dev is based, LFG 🚀"
+  },
+  {
+   "topic": "money",
+   "tones": [],
+   "text": "If you're 22 with $5k saved, here's how I'd invest it"
+  },
+  {
+   "topic": "tech",
+   "tones": [],
+   "text": "The new open weights model runs locally on a laptop and beats last year's frontier models on coding"
+  },
+  {
+   "topic": "tech",
+   "tones": [],
+   "text": "Researchers just mapped the entire brain of a fruit fly, every single neuron"
+  },
+  {
+   "topic": "tech",
+   "tones": [],
+   "text": "Starship completed its first full orbit and the booster was caught by the tower again"
+  },
+  {
+   "topic": "tech",
+   "tones": [],
+   "text": "The new MacBook battery life is honestly ridiculous, 22 hours in my testing"
+  },
+  {
+   "topic": "tech",
+   "tones": [
+    "doom"
+   ],
+   "text": "AI will replace every junior developer within two years and nobody is prepared for what comes next"
+  },
+  {
+   "topic": "learning",
+   "tones": [],
+   "text": "Spaced repetition changed how I study. Here's my Anki setup for med school 🧵"
+  },
+  {
+   "topic": "learning",
+   "tones": [],
+   "text": "Free Harvard CS50 course is still the best intro to programming out there"
+  },
+  {
+   "topic": "learning",
+   "tones": [],
+   "text": "How I finally understood linear algebra: 3Blue1Brown + doing problems by hand"
+  },
+  {
+   "topic": "learning",
+   "tones": [],
+   "text": "TIL you can press Ctrl+Shift+T to reopen a closed browser tab"
+  },
+  {
+   "topic": "learning",
+   "tones": [],
+   "text": "Writing tip: cut every sentence that doesn't add anything new"
+  },
+  {
+   "topic": "fitness",
+   "tones": [],
+   "text": "Zone 2 cardio 3x a week and my resting heart rate dropped by 8 bpm"
+  },
+  {
+   "topic": "fitness",
+   "tones": [],
+   "text": "First pull up ever today at 34. Took me 4 months of negatives 💪"
+  },
+  {
+   "topic": "fitness",
+   "tones": [],
+   "text": "Creatine is the most researched supplement there is, just take it"
+  },
+  {
+   "topic": "fitness",
+   "tones": [],
+   "text": "Ran my first half marathon this morning, 1:52, legs are jelly"
+  },
+  {
+   "topic": "fitness",
+   "tones": [],
+   "text": "Stretch your hip flexors if you sit all day, your lower back will thank you"
+  },
+  {
+   "topic": "lifestyle",
+   "tones": [],
+   "text": "Spent the weekend in the Lake District, the walk up to Catbells was stunning"
+  },
+  {
+   "topic": "lifestyle",
+   "tones": [],
+   "text": "One pot chickpea curry, ready in 25 minutes, recipe below 🍛"
+  },
+  {
+   "topic": "lifestyle",
+   "tones": [],
+   "text": "Finally finished painting the living room, went with a deep green and I love it"
+  },
+  {
+   "topic": "lifestyle",
+   "tones": [],
+   "text": "Found the best pastel de nata in Lisbon, tiny bakery near the river"
+  },
+  {
+   "topic": "lifestyle",
+   "tones": [],
+   "text": "My capsule wardrobe for autumn: 12 pieces, 30 outfits"
+  },
+  {
+   "topic": "personal",
+   "tones": [],
+   "text": "My daughter lost her first tooth today and was more excited about the tooth fairy than anything"
+  },
+  {
+   "topic": "personal",
+   "tones": [],
+   "text": "Passed my driving test on the third try!! 🚗"
+  },
+  {
+   "topic": "personal",
+   "tones": [],
+   "text": "Rough week. Grateful for friends who check in."
+  },
+  {
+   "topic": "personal",
+   "tones": [],
+   "text": "Our cat brought a live frog into the kitchen at 6am. Chaos."
+  },
+  {
+   "topic": "personal",
+   "tones": [],
+   "text": "Moved into our first house today, still can't quite believe it"
+  },
+  {
+   "topic": "relationships",
+   "tones": [],
+   "text": "Women: he should pay on the first date. Also women: I'm independent. Pick one."
+  },
+  {
+   "topic": "relationships",
+   "tones": [],
+   "text": "If your man doesn't post you, he's hiding you. Period."
+  },
+  {
+   "topic": "relationships",
+   "tones": [],
+   "text": "Men really think going on one date means you're exclusive 💀"
+  },
+  {
+   "topic": "relationships",
+   "tones": [],
+   "text": "Is it weird that my boyfriend still follows his ex on everything?"
+  },
+  {
+   "topic": "relationships",
+   "tones": [],
+   "text": "The talking stage is the worst part of modern dating, nobody commits to anything"
+  },
+  {
+   "topic": "ads",
+   "tones": [],
+   "text": "Our biggest sale of the year starts NOW. 40% off everything until Sunday 🛍️"
+  },
+  {
+   "topic": "ads",
+   "tones": [
+    "engagementbait"
+   ],
+   "text": "🎁 GIVEAWAY 🎁 We're giving away 3 pairs of headphones! Follow + RT + tag 2 friends to enter"
+  },
+  {
+   "topic": "ads",
+   "tones": [],
+   "text": "Introducing our new protein bar: 20g protein, 2g sugar. Available in stores now"
+  },
+  {
+   "topic": "ads",
+   "tones": [],
+   "text": "Join 50,000 marketers getting our free weekly newsletter, link in bio"
+  },
+  {
+   "topic": "ads",
+   "tones": [],
+   "text": "Sponsored: Try the meal kit everyone's talking about, first box half price"
+  },
+  {
+   "topic": "sexualised",
+   "tones": [],
+   "text": "late night selfies hit different 😏 more on my page"
+  },
+  {
+   "topic": "sexualised",
+   "tones": [],
+   "text": "rate this fit 1-10 🍑 be honest"
+  },
+  {
+   "topic": "sexualised",
+   "tones": [],
+   "text": "new set dropping tonight, subscribers get it first 🔥😈"
+  },
+  {
+   "topic": "any",
+   "tones": [
+    "vaguepost"
+   ],
+   "text": "some people never change lol"
+  },
+  {
+   "topic": "any",
+   "tones": [
+    "vaguepost"
+   ],
+   "text": "I'm so tired of pretending"
+  },
+  {
+   "topic": "any",
+   "tones": [
+    "engagementbait"
+   ],
+   "text": "Say something nice to the next person who replies to this 💛"
+  },
+  {
+   "topic": "any",
+   "tones": [
+    "doom"
+   ],
+   "text": "Rent is half my salary and it'll be more next year. There's no way out of this."
+  },
+  {
+   "topic": "any",
+   "tones": [
+    "ragebait"
+   ],
+   "text": "People who put their phone on speaker in public deserve to be fined, no exceptions"
+  },
+  {
+   "topic": "tech",
+   "tones": [
+    "format"
+   ],
+   "text": "> be Lauren Tan\n> build Grok Bot\n> spend 6 months setting rules your AI can't break\n> ban almost all code comments\n> ship 3,000 updates in one month"
+  },
+  {
+   "topic": "money",
+   "tones": [
+    "format"
+   ],
+   "text": "> be 19\n> put savings into a coin a guy on discord recommended\n> it goes to zero\n> become a 'trader' anyway"
+  },
+  {
+   "topic": "memes",
+   "tones": [
+    "format"
+   ],
+   "text": "POV: your code works on the first try and you don't know why"
+  },
+  {
+   "topic": "any",
+   "tones": [
+    "format"
+   ],
+   "text": "nobody:\nmy neighbour at 7am on a Sunday: *starts drilling*"
+  },
+  {
+   "topic": "fitness",
+   "tones": [
+    "format"
+   ],
+   "text": "Tell me you skipped leg day without telling me you skipped leg day"
+  },
+  {
+   "topic": "learning",
+   "tones": [
+    "format"
+   ],
+   "text": "Day 1 vs Day 200 of learning Japanese 🇯🇵"
+  },
+  {
+   "topic": "tech",
+   "tones": [
+    "format"
+   ],
+   "text": "The 'I just discovered AI agents' starter pack"
+  },
+  {
+   "topic": "any",
+   "tones": [
+    "format"
+   ],
+   "text": "Me: I'm going to be productive today\nAlso me: watches 6 hours of YouTube"
+  },
+  {
+   "topic": "lifestyle",
+   "tones": [
+    "format"
+   ],
+   "text": "It's giving cosy autumn evening with a book and candles"
+  },
+  {
+   "topic": "tech",
+   "tones": [],
+   "text": "Changelog for v2.1:\n- faster startup\n- fixed the login bug\n- new dark mode"
+  },
+  {
+   "topic": "learning",
+   "tones": [],
+   "text": "Quick reminder: in Python, 5 > 3 returns True and 'a' > 'B' also returns True. Comparisons can surprise you."
+  },
+  {
+   "topic": "personal",
+   "tones": [],
+   "text": "Nobody tells you how tiring the first month with a newborn is. Grateful but exhausted."
+  }
+ ]
 }

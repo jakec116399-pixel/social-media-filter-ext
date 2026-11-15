@@ -184,6 +184,10 @@ export function heuristicHits(post: Pick<PostData, "text" | "hasLink" | "hasMedi
     hits.unshift({ category: "sexualised", reason: "Suggestive post" });
   }
 
+  // Templated / trend-format posts (greentext, POV:, nobody: me:, ...).
+  const fmt = trendFormat(post.text);
+  if (fmt) hits.push({ category: "format", reason: fmt });
+
   // Vagueposts: very short, no link or media, and no concrete information.
   if (isVaguepost(post)) {
     hits.push({ category: "vaguepost", reason: "Vaguepost" });
@@ -212,4 +216,32 @@ const PROMO_RE =
 export function suggestiveSignals(text: string): boolean {
   const n = text.match(SUGGESTIVE_EMOJI)?.length ?? 0;
   return n >= 2 || (n >= 1 && PROMO_RE.test(text));
+}
+
+// Recognisable post templates. Checked on the raw text (line breaks matter).
+const FORMATS: [RegExp, string][] = [
+  [/(?:^|\n)[ \t]*>[ \t]*\S[^\n]*\n[ \t]*>[ \t]*\S/, "Greentext (> be me)"],
+  [/(?:^|\n)[ \t]*pov ?:/i, "POV post"],
+  [/(?:^|\n)[ \t]*nobody ?:/i, '"nobody: / me:" format'],
+  [
+    /(?:^|\n)[ \t]*me ?:[^\n]*\n+[ \t]*(?:also me|me \d+ (?:minutes?|hours?|seconds?) later|my (?:brain|bank account|wallet)|the \w+)[^\n]*:/i,
+    '"me: / also me:" format',
+  ],
+  [
+    /\btell me (?:you(?:'|’)?re|you are|you|your)\b.{1,60}\bwithout telling me\b/i,
+    '"tell me without telling me" format',
+  ],
+  [/\bhow it started\b.{0,40}\bhow it(?:'|’)?s going\b/is, '"how it started / going" format'],
+  [/\bexpectation(?:s)? (?:vs\.?|versus|x) reality\b/i, '"expectation vs reality" format'],
+  [/\bstarter pack\b/i, "Starter pack"],
+  [/\bname a (?:more iconic|better) (?:duo|trio|combo)\b/i, '"name a more iconic duo" format'],
+  [/\bthings that just make sense\b/i, '"things that just make sense" format'],
+  [/\bday \d+ (?:vs\.?|versus) day \d+\b/i, '"day 1 vs day 100" format'],
+  [/(?:^|\n)[ \t]*(?:it(?:'|’)?s giving)\b/i, '"it\'s giving" format'],
+];
+
+/** Name of the trend format a post uses, if any. */
+export function trendFormat(text: string): string | undefined {
+  for (const [re, name] of FORMATS) if (re.test(text)) return name;
+  return undefined;
 }

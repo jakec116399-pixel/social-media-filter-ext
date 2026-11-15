@@ -8,7 +8,7 @@ Every post gets labels in three groups, and you choose which labels hide a post:
 |---|---|
 | **Safety** | Sexualised (text and images) |
 | **Topics**: what a post is about | Politics · News & events · Celebrity & gossip · Sports · Film, TV, music & gaming · Memes & humour · Money, crypto & hustle · Tech & science · Learning & education · Health & fitness · Food, travel & lifestyle · Personal updates · Relationships & dating · Ads & promotion |
-| **Tone**: how it's written | Rage bait · Engagement bait · Vagueposting · Doom & negativity |
+| **Tone**: how it's written | Rage bait · Engagement bait · Vagueposting · Doom & negativity · Trend formats ("> be me" greentext, "POV:", "nobody: / me:", "tell me … without telling me", starter packs…) |
 | **Goal mode** | Off-goal: hide anything unrelated to goals you choose (e.g. "Learning to code") |
 
 A post can have several labels, such as "Politics · Rage bait", so you can, for example, keep politics but hide rage bait.
@@ -17,7 +17,10 @@ Hidden posts collapse to a small bar, or are covered in place, with a **Show any
 
 ### Teach it
 
-Right-click any post → **Focus Feed** →
+**On posts you chose to show:** a quiet line stays under the post, "Hidden as Politics · Rage bait · Right? ✓ ✗". ✓ reinforces the label. ✗ lets you pick the correct topic or tone, or say "don't hide posts like this".
+
+**On any post:** 
+right-click → **Focus Feed** →
 - **Hide posts about… → (topic)** or **Hide posts written like this… → (tone)** for posts it missed. This also switches that label on.
 - **Don't hide posts like this** for posts it hid by mistake.
 
@@ -58,6 +61,10 @@ Normal Firefox only keeps extensions signed by Mozilla. Signing is free:
 1. Create a free account at https://addons.mozilla.org.
 2. Under **Developer Hub → Submit a New Add-on**, choose **On your own** (unlisted, so it isn't public) and upload `focus-feed-firefox.zip`.
 3. Mozilla signs it automatically, usually within minutes. Download the signed `.xpi` and open it in Firefox to install.
+
+### Lock (strict mode)
+
+With strictness set to **Strict**, you can tick **Lock hidden posts**. Hidden posts then show 🔒 with no "Show anyway", and can't be taught back into the feed. It can still be turned off in settings.
 
 ## How it works
 

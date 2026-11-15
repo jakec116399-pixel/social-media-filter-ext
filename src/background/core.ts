@@ -4,6 +4,7 @@ import { ext } from "../shared/ext";
 import { getSettings, saveSettings, today } from "../shared/settings";
 import {
   LABELS,
+  isLocked,
   EMPTY_EXAMPLES,
   MAX_EXAMPLES,
   type DayStats,
@@ -132,6 +133,36 @@ async function createMenus() {
   }
 }
 
+/**
+ * Learn from the user: "hide" adds the post as an example of `label` (and,
+ * with `enable`, switches that label on); "keep" marks it as a post not to hide.
+ */
+async function teach(post: PostData, action: "hide" | "keep", label?: LabelId, enable = false) {
+  if (!post.text.trim()) return; // nothing to learn from (e.g. image-only post)
+  const text = post.text.slice(0, 500);
+  const settings = await getSettings();
+  if (action === "keep") {
+    if (isLocked(settings)) return; // locked: hidden posts can't be taught back into the feed
+    await updateExamples((e) => {
+      e.keep = e.keep.filter((k) => k !== text);
+      e.keep.push(text);
+      e.hide = e.hide.filter((h) => h.text !== text);
+    });
+    (await getLog()).filter((d) => d.id === post.id).forEach((d) => (d.overridden = true));
+  } else if (label) {
+    await updateExamples((e) => {
+      e.hide = e.hide.filter((h) => h.text !== text);
+      e.hide.push({ category: label, text });
+      e.keep = e.keep.filter((k) => k !== text);
+    });
+    if (enable && !settings.categories[label]) {
+      settings.categories[label] = true;
+      await saveSettings(settings);
+    }
+  }
+  await broadcastRescan();
+}
+
 async function onMenuClick(info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab) {
   if (!tab?.id) return;
   const id = String(info.menuItemId);
@@ -139,30 +170,10 @@ async function onMenuClick(info: chrome.contextMenus.OnClickData, tab?: chrome.t
   const post = (await ext.tabs.sendMessage(tab.id, { type: "feedback-collect" } satisfies Msg, {
     frameId: info.frameId,
   })) as PostData | null;
-  if (!post?.text.trim()) return; // nothing to learn from (e.g. image-only post, or not on a post)
-  const text = post.text.slice(0, 500);
-  if (id === "keep") {
-    await updateExamples((e) => {
-      e.keep.push(text);
-      e.hide = e.hide.filter((h) => h.text !== text);
-    });
-    // Also mark it as a mistake in the log.
-    (await getLog()).filter((d) => d.id === post.id).forEach((d) => (d.overridden = true));
-  } else {
-    const category = id.slice(5) as LabelId;
-    await updateExamples((e) => {
-      e.hide = e.hide.filter((h) => h.text !== text);
-      e.hide.push({ category, text });
-      e.keep = e.keep.filter((k) => k !== text);
-    });
-    // Teaching "hide posts about X" means the user wants X hidden: switch it on.
-    const settings = await getSettings();
-    if (!settings.categories[category]) {
-      settings.categories[category] = true;
-      await saveSettings(settings);
-    }
-  }
-  await broadcastRescan();
+  if (!post) return;
+  // Teaching "hide posts about X" from the menu means the user wants X hidden: switch it on.
+  if (id === "keep") await teach(post, "keep");
+  else await teach(post, "hide", id.slice(5) as LabelId, true);
 }
 
 async function broadcastRescan() {
@@ -210,6 +221,9 @@ export function startBackground(backend: Backend): void {
         void updateStats((s) => (s.overrides[msg.category] = (s.overrides[msg.category] ?? 0) + 1));
         void getLog().then((l) => l.filter((d) => d.id === msg.id).forEach((d) => (d.overridden = true)));
         return false;
+      case "teach":
+        teach(msg.post, msg.action, msg.label, msg.enable).then(() => sendResponse(true));
+        return true;
       case "get-report":
         buildReport().then(sendResponse);
         return true;

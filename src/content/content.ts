@@ -2,7 +2,17 @@
 // until it has been checked, then reveals it or replaces it with a small bar.
 import { ext } from "../shared/ext";
 import { getSettings, onSettingsChanged } from "../shared/settings";
-import { labelName, type Category, type PostData, type Settings, type Verdict } from "../shared/types";
+import {
+  LABELS,
+  isLocked,
+  labelName,
+  type Category,
+  type LabelId,
+  type Msg,
+  type PostData,
+  type Settings,
+  type Verdict,
+} from "../shared/types";
 import { POST_SELECTOR, extractPost, mediaPending, quickPostId } from "./x-adapter";
 
 const ROOT = document.documentElement;
@@ -81,15 +91,115 @@ function explain(v: Verdict): string {
     "Scores:",
     ...scores,
     "",
-    "Wrong? Right-click the post → Focus Feed.",
+    "Wrong? Show it and use ✓ / ✗, or right-click the post → Focus Feed.",
   ].join("\n");
+}
+
+const taughtIds = new Set<string>(); // posts the user gave feedback on (this page session)
+
+function stop(e: Event) {
+  e.stopPropagation(); // don't let X open the post
+}
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
+  const e = document.createElement(tag);
+  e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+/**
+ * Subtle line on a post the user chose to show: how it was labelled, and
+ * whether that was right, so the model can be reinforced or corrected.
+ */
+function feedbackNote(article: HTMLElement, post: PostData, v: Verdict, s: Settings): HTMLElement {
+  const note = el("div", "smf-note");
+  note.addEventListener("click", stop);
+  const label = el("span", "smf-note-label", `Hidden as ${v.reason ?? labelName(v.category!)}`);
+  label.title = explain(v);
+  note.append(label);
+
+  const send = (action: "hide" | "keep", labelId?: LabelId) => {
+    taughtIds.add(post.id);
+    ext.runtime.sendMessage({ type: "teach", post, action, label: labelId } satisfies Msg).catch(() => {});
+    render(article, post, v, s);
+  };
+
+  if (taughtIds.has(post.id)) {
+    note.append(el("span", "smf-note-thanks", "✓ Thanks, learned"));
+    return note;
+  }
+
+  const actions = el("span", "smf-note-actions");
+  const q = el("span", "smf-note-q", "Right?");
+  const yes = el("button", "smf-note-btn", "✓");
+  yes.type = "button";
+  yes.title = "Yes, this was labelled correctly (reinforce)";
+  const no = el("button", "smf-note-btn", "✗");
+  no.type = "button";
+  no.title = "No, this was labelled wrong";
+  yes.addEventListener("click", (e) => {
+    stop(e);
+    const labels = (v.hiddenBy ?? []).filter((h): h is LabelId => h !== "offgoal");
+    if (labels.length) send("hide", labels[0]);
+    else {
+      taughtIds.add(post.id);
+      render(article, post, v, s);
+    }
+  });
+  no.addEventListener("click", (e) => {
+    stop(e);
+    // Ask what it actually is.
+    const select = el("select", "smf-note-select");
+    const keepOpt = el("option", "", "Nothing to hide: don't hide posts like this");
+    keepOpt.value = "keep";
+    select.append(keepOpt);
+    for (const [group, title] of [
+      ["safety", "Safety"],
+      ["topic", "It's actually about…"],
+      ["tone", "Its tone is actually…"],
+    ] as const) {
+      const og = document.createElement("optgroup");
+      og.label = title;
+      for (const l of LABELS.filter((x) => x.group === group)) {
+        const o = el("option", "", l.label);
+        o.value = l.id;
+        og.append(o);
+      }
+      select.append(og);
+    }
+    const save = el("button", "smf-note-btn smf-note-save", "Save");
+    save.type = "button";
+    save.addEventListener("click", (ev) => {
+      stop(ev);
+      if (select.value === "keep") send("keep");
+      else send("hide", select.value as LabelId);
+    });
+    const cancel = el("button", "smf-note-btn", "Cancel");
+    cancel.type = "button";
+    cancel.addEventListener("click", (ev) => {
+      stop(ev);
+      render(article, post, v, s);
+    });
+    actions.replaceChildren(select, save, cancel);
+  });
+  actions.append(q, yes, no);
+  note.append(actions);
+  return note;
 }
 
 function render(article: HTMLElement, post: PostData, v: Verdict, s: Settings) {
   if (article.dataset.smfId !== post.id) return; // X reused this element for another post
   article.querySelector(":scope > .smf-bar")?.remove();
-  if (!v.hide || revealed.has(post.id)) {
-    article.dataset.smf = revealed.has(post.id) ? "revealed" : "ok";
+  article.querySelector(":scope > .smf-note")?.remove();
+  const locked = isLocked(s);
+  if (!v.hide) {
+    article.dataset.smf = "ok";
+    return;
+  }
+  if (revealed.has(post.id) && !locked) {
+    article.dataset.smf = "revealed";
+    article.append(feedbackNote(article, post, v, s));
     return;
   }
   article.dataset.smf = "hidden";
@@ -100,25 +210,27 @@ function render(article: HTMLElement, post: PostData, v: Verdict, s: Settings) {
     ext.runtime.sendMessage({ type: "hidden", category: v.category }).catch(() => {});
   }
 
-  const bar = document.createElement("div");
-  bar.className = "smf-bar";
-  const label = document.createElement("span");
-  label.className = "smf-label";
-  label.textContent = `Hidden · ${v.reason ?? v.category}`;
+  const bar = el("div", "smf-bar");
+  const label = el("span", "smf-label", `Hidden · ${v.reason ?? v.category}`);
   label.title = explain(v);
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "smf-show";
-  btn.textContent = "Show anyway";
-  btn.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    revealed.add(post.id);
-    ext.runtime.sendMessage({ type: "override", category: v.category as Category, id: post.id }).catch(() => {});
-    render(article, post, v, s);
-  });
-  bar.addEventListener("click", (e) => e.stopPropagation()); // don't open the post
-  bar.append(label, btn);
+  bar.addEventListener("click", stop); // don't open the post
+  bar.append(label);
+  if (locked) {
+    const lock = el("span", "smf-locked", "🔒 Locked");
+    lock.title = "Strict mode lock is on: hidden posts can't be shown. Change this in Focus Feed settings.";
+    bar.append(lock);
+  } else {
+    const btn = el("button", "smf-show", "Show anyway");
+    btn.type = "button";
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      stop(e);
+      revealed.add(post.id);
+      ext.runtime.sendMessage({ type: "override", category: v.category as Category, id: post.id }).catch(() => {});
+      render(article, post, v, s);
+    });
+    bar.append(btn);
+  }
   article.append(bar);
 }
 
@@ -177,7 +289,11 @@ function scheduleScan() {
 new MutationObserver((mutations) => {
   for (const m of mutations) {
     for (const n of m.addedNodes) {
-      if (n.nodeType === Node.ELEMENT_NODE && !(n as Element).classList.contains("smf-bar")) {
+      if (
+        n.nodeType === Node.ELEMENT_NODE &&
+        !(n as Element).classList.contains("smf-bar") &&
+        !(n as Element).closest(".smf-note")
+      ) {
         scheduleScan();
         return;
       }

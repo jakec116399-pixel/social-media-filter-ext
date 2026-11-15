@@ -26,13 +26,14 @@ const POSTS = [
   { user: "rustlang", name: "Rust Learner", text: "Wrote my first async web server in Rust, the borrow checker finally clicked", img: "code.jpg", expect: "show", goal: true },
   { user: "news", name: "Politics Now", text: "Polls tighten as both candidates make their final push before Tuesday's vote", expect: "politics" },
   { user: "foodie", name: "Weeknight Cook", text: "15 minute chickpea curry, recipe in the replies", expect: "show", goal: false },
+  { user: "greentext", name: "Kirill", text: "> be Lauren Tan\n> build Grok Bot\n> spend 6 months setting rules your AI can't break\n> ship 3,000 updates in one month", expect: "format", goal: true },
   { user: "drama", name: "Tea Spill", text: "This influencer's fake apology video is getting ratioed into oblivion", expect: "gossip" },
 ];
 
 // Expected label shown on the "Hidden · …" bar for each category.
 const LABEL_TEXT = {
   sexualised: /Sexualised|Suggestive/, politics: /Politics/, gossip: /Celebrity/, vaguepost: /Vagueposting/,
-  engagementbait: /Engagement bait/,
+  engagementbait: /Engagement bait/, format: /Trend format/,
 };
 const NONE = Object.fromEntries(
   ["sexualised", "politics", "news", "gossip", "sports", "entertainment", "memes", "money", "tech", "learning", "fitness",
@@ -76,7 +77,7 @@ async function setSettings(settings) {
 }
 const base = {
   enabled: true, onboarded: true, strictness: "balanced", hideStyle: "collapse", allowAccounts: [], goals: [],
-  categories: { ...NONE, sexualised: true, politics: true, gossip: true, ragebait: true, engagementbait: true, vaguepost: true },
+  categories: { ...NONE, sexualised: true, politics: true, gossip: true, ragebait: true, engagementbait: true, vaguepost: true, format: true },
 };
 
 async function runFeed(label, settings, expectFn) {
@@ -125,6 +126,39 @@ await firstHidden.locator(".smf-show").click();
 await r1.page.waitForTimeout(200);
 assert.equal(await r1.page.locator('article[data-smf="revealed"]').count(), 1, "Show anyway should reveal the post");
 console.log("  ✓ 'Show anyway' reveals a hidden post");
+
+// The revealed post keeps a subtle "Hidden as … Right? ✓ ✗" line; ✓ reinforces.
+{
+  const rev = r1.page.locator('article[data-smf="revealed"]').first();
+  const noteText = await rev.locator(".smf-note-label").innerText();
+  assert.match(noteText, /^Hidden as /);
+  if (screens) {
+    await rev.screenshot({ path: join(outDir, "revealed-note.png") });
+    await rev.locator(".smf-note-btn", { hasText: "✗" }).click();
+    await rev.screenshot({ path: join(outDir, "revealed-note-wrong.png") });
+    await rev.locator(".smf-note-btn", { hasText: "Cancel" }).click();
+  }
+  await rev.locator(".smf-note-btn", { hasText: "✓" }).click();
+  await r1.page.waitForFunction(() => document.querySelector(".smf-note-thanks"), null, { timeout: 10000 });
+  const ex = await sw.evaluate(() => chrome.storage.local.get("examples"));
+  assert.equal(ex.examples.hide.length, 1, "✓ should store a reinforcing example");
+  console.log(`  ✓ Feedback line on revealed post ("${noteText}") and ✓ reinforces`);
+
+  // ✗ → "don't hide posts like this" unhides another post.
+  const target = r1.page.locator('article[data-smf="hidden"]').last();
+  const text = await target.locator('[data-testid="tweetText"]').innerText();
+  await target.locator(".smf-show").click();
+  const rev2 = r1.page.locator('article[data-smf="revealed"]', { hasText: text.slice(0, 30) });
+  await rev2.locator(".smf-note-btn", { hasText: "✗" }).click();
+  await rev2.locator(".smf-note-select").selectOption("keep");
+  await rev2.locator(".smf-note-save").click();
+  await r1.page.waitForFunction(
+    (t) => [...document.querySelectorAll('article[data-testid="tweet"]')].some((a) => a.innerText.includes(t) && a.dataset.smf === "ok"),
+    text.slice(0, 30), { timeout: 15000 },
+  );
+  console.log(`  ✓ ✗ → "don't hide posts like this" corrects: "${text.slice(0, 40)}"`);
+  await sw.evaluate(() => chrome.storage.local.remove("examples"));
+}
 
 // Teaching: right-click a hidden post → "Don't hide posts like this" must unhide it.
 {
@@ -193,6 +227,20 @@ const hiddenWhenOff = await p4.locator('article[data-smf="hidden"]').count();
 assert.equal(hiddenWhenOff, 0, "nothing hidden when disabled");
 console.log("\n  ✓ Nothing hidden when the extension is switched off");
 await p4.close();
+
+// Strict + lock: no way to unhide.
+{
+  await setSettings({ ...base, strictness: "strict", lockHidden: true });
+  const p5 = await ctx.newPage();
+  await p5.addInitScript((posts) => (window.__POSTS__ = posts), POSTS);
+  await p5.goto("https://x.com/home");
+  await p5.waitForFunction(() => document.querySelectorAll('article[data-smf="hidden"]').length >= 3, null, { timeout: 30000 });
+  assert.equal(await p5.locator(".smf-show").count(), 0, "no Show anyway when locked");
+  assert.ok((await p5.locator(".smf-locked").count()) >= 3);
+  console.log("  ✓ Strict + lock: hidden posts show 🔒 and have no Show anyway");
+  if (screens) await p5.screenshot({ path: join(outDir, "feed-locked.png"), fullPage: true });
+  await p5.close();
+}
 
 if (screens) {
   await setSettings({ ...base, onboarded: false, goals: ["Learning to code"], categories: { ...base.categories, offgoal: true } });

@@ -46,7 +46,7 @@ export const THRESHOLDS: Record<Strictness, Thresholds> = {
     topicFloor: 0.25,
     sexualLead: 0.08,
     sexualFloor: 0.32,
-    tone: { ragebait: 0.13, engagementbait: 0.13, vaguepost: 0.15, doom: 0.15 },
+    tone: { ragebait: 0.13, engagementbait: 0.13, vaguepost: 0.15, doom: 0.15, format: 0.15 },
     goalRelevance: 0.2,
   },
   balanced: {
@@ -54,7 +54,7 @@ export const THRESHOLDS: Record<Strictness, Thresholds> = {
     topicFloor: 0.22,
     sexualLead: 0.05,
     sexualFloor: 0.3,
-    tone: { ragebait: 0.1, engagementbait: 0.1, vaguepost: 0.12, doom: 0.12 },
+    tone: { ragebait: 0.1, engagementbait: 0.1, vaguepost: 0.12, doom: 0.12, format: 0.1 },
     goalRelevance: 0.24,
   },
   strict: {
@@ -62,7 +62,7 @@ export const THRESHOLDS: Record<Strictness, Thresholds> = {
     topicFloor: 0.2,
     sexualLead: 0.02,
     sexualFloor: 0.27,
-    tone: { ragebait: 0.07, engagementbait: 0.07, vaguepost: 0.09, doom: 0.09 },
+    tone: { ragebait: 0.07, engagementbait: 0.07, vaguepost: 0.09, doom: 0.09, format: 0.09 },
     goalRelevance: 0.28,
   },
 };

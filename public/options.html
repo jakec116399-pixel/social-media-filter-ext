@@ -51,6 +51,7 @@
       .saved { color: var(--ok); font-weight: 600; opacity: 0; transition: opacity 200ms; }
       .saved.show { opacity: 1; }
       textarea { min-height: 70px; margin-top: 12px; }
+      .lock { margin-top: 14px; }
       .perm { border-color: var(--accent); background: var(--accent-soft); }
     </style>
   </head>
@@ -110,6 +111,13 @@
           <label><input type="radio" name="strictness" value="strict" />Strict</label>
         </div>
         <p class="hint muted" id="strict-hint"></p>
+        <label class="cat lock" id="lock-row" hidden>
+          <input type="checkbox" id="lock" />
+          <div>
+            <strong>🔒 Lock hidden posts</strong>
+            <span class="muted">No "Show anyway" button, and hidden posts can't be taught back into your feed. You can still turn this off here.</span>
+          </div>
+        </label>
       </section>
 
       <section class="card">
