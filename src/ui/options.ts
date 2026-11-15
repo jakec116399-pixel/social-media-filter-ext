@@ -1,3 +1,4 @@
+import { ext } from "../shared/ext";
 import { getSettings, saveSettings } from "../shared/settings";
 import { GOAL_PRESETS } from "../shared/textModel";
 import { CATEGORIES, type Settings, type Strictness } from "../shared/types";
@@ -115,3 +116,14 @@ getSettings().then((loaded) => {
   renderRadios();
   $<HTMLTextAreaElement>("allow").value = s.allowAccounts.map((h) => `@${h}`).join("\n");
 });
+
+// Firefox may not grant site access at install time; ask for it here.
+const ORIGINS = { origins: ["https://x.com/*", "https://twitter.com/*", "https://pbs.twimg.com/*"] };
+async function checkPermission() {
+  $("perm").hidden = await ext.permissions.contains(ORIGINS);
+}
+$("grant").addEventListener("click", async () => {
+  await ext.permissions.request(ORIGINS);
+  await checkPermission();
+});
+void checkPermission();

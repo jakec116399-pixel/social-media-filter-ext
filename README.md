@@ -16,26 +16,46 @@ Hidden posts collapse to a small bar, or blur in place, with a **Show anyway** b
 
 ## Try it
 
+No developer account is needed to try it on your own computer.
+
+### Firefox (temporary, until Firefox restarts)
+
+1. Download `focus-feed-firefox.zip` and unzip it.
+2. In Firefox, open `about:debugging#/runtime/this-firefox`.
+3. Click **Load Temporary Add-on…** and choose the `manifest.json` file in the unzipped folder.
+4. The setup page opens. If it shows **Allow access to X**, click it and accept. Then pick your categories and goals and click **Save**.
+5. Open https://x.com/home and scroll.
+
+Firefox removes temporary add-ons when it restarts. To keep it installed, the extension has to be signed by Mozilla (see below).
+
+### Chrome / Edge / Brave
+
+1. Unzip `focus-feed-chrome.zip`.
+2. Open `chrome://extensions` and turn on **Developer mode**.
+3. Click **Load unpacked** and choose the unzipped folder.
+
+### Building from source
+
 ```bash
 npm install
 npm run setup   # downloads the text AI model (~23 MB) into public/models
-npm run build   # builds the extension into dist/
+npm run build   # builds dist/chrome, dist/firefox and a .zip of each
 ```
 
-Then in Chrome:
+### Installing permanently on Firefox
 
-1. Open `chrome://extensions`.
-2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and select the `dist/` folder.
-4. The setup page opens. Pick your categories and goals, then click **Save**.
-5. Open https://x.com/home and scroll.
+Normal Firefox only keeps extensions signed by Mozilla. Signing is free:
+
+1. Create a free account at https://addons.mozilla.org.
+2. Under **Developer Hub → Submit a New Add-on**, choose **On your own** (unlisted, so it isn't public) and upload `focus-feed-firefox.zip`.
+3. Mozilla signs it automatically, usually within minutes. Download the signed `.xpi` and open it in Firefox to install.
 
 ## How it works
 
 ```
 X page ──► content script ─── keyword rules (instant) ──► hide / show
               │
-              └─► background worker ──► offscreen document (AI models)
+              └─► background ──► AI engine (Chrome: offscreen document; Firefox: background page)
                                           ├─ text: MiniLM sentence embeddings (~3 ms/post)
                                           └─ images: NSFWJS MobileNetV2 (~100–200 ms/image)
 ```
@@ -54,7 +74,7 @@ X page ──► content script ─── keyword rules (instant) ──► hide
 | `npm run build` | Build to `dist/` |
 | `npm test` | Unit tests |
 | `npm run eval` | Text-filter accuracy on `tests/data/labeled-posts.json` (`-- --mistakes` lists errors) |
-| `npm run e2e` | Loads the built extension in Chromium against a mock X feed and checks which posts are hidden (`-- --screens` saves screenshots to `test-results/`) |
+| `npm run e2e` | Loads the Chrome build in Chromium against a mock X feed and checks which posts are hidden (`-- --screens` saves screenshots to `test-results/`) |
 | `npm run typecheck` | TypeScript check |
 
 ### Current accuracy (balanced setting)
@@ -66,7 +86,7 @@ These sets are small and hand-written, so treat them as a smoke test. Real-world
 
 ## Known limitations
 
-- **Desktop Chrome (and Chromium browsers) only** for now. Firefox needs a small change, because it has no offscreen documents.
+- **Desktop Firefox and Chrome-family browsers.** Firefox runs the AI in its background page; Chrome uses an offscreen document. Firefox for Android supports extensions too, but this hasn't been tested there.
 - **Video** is judged by its thumbnail, not its frames.
 - **Off-goal mode** doesn't hide posts with fewer than 3 words, because there is too little text to judge.
 - **Text-based**: it doesn't understand sarcasm or context the way a large language model would.

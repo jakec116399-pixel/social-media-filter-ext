@@ -1,3 +1,4 @@
+import { ext } from "../shared/ext";
 import { getSettings, saveSettings } from "../shared/settings";
 import { CATEGORIES, type DayStats } from "../shared/types";
 
@@ -14,7 +15,7 @@ async function init() {
     await saveSettings(s);
   });
 
-  const stats: DayStats = await chrome.runtime.sendMessage({ type: "get-stats" });
+  const stats: DayStats = await ext.runtime.sendMessage({ type: "get-stats" });
   const total = Object.values(stats.hidden).reduce((a, b) => a + (b ?? 0), 0);
   $("hidden-count").textContent = String(total);
   $("sub").textContent = `posts hidden today${stats.scanned ? ` · ${stats.scanned} checked by AI` : ""}`;
@@ -30,7 +31,7 @@ async function init() {
       return li;
     }),
   );
-  $("settings").addEventListener("click", () => chrome.runtime.openOptionsPage());
+  $("settings").addEventListener("click", () => ext.runtime.openOptionsPage());
 }
 
 void init();

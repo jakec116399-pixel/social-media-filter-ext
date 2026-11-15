@@ -1,12 +1,13 @@
 // Content script for x.com: finds each post as it appears, keeps it blurred
 // until it has been checked, then reveals it or replaces it with a small bar.
+import { ext } from "../shared/ext";
 import { heuristicHits } from "../shared/heuristics";
 import { getSettings, onSettingsChanged } from "../shared/settings";
 import type { Category, PostData, Settings, Verdict } from "../shared/types";
 import { POST_SELECTOR, extractPost, mediaPending } from "./x-adapter";
 
 const ROOT = document.documentElement;
-const TIMEOUT_MS = 6000;
+const TIMEOUT_MS = 15000; // first model load can take several seconds on slow machines
 
 let settings: Settings | null = null;
 const verdicts = new Map<string, Verdict>(); // post id -> verdict
@@ -27,7 +28,7 @@ function applySettings(s: Settings) {
     document.querySelectorAll(POST_SELECTOR).forEach((a) => resetArticle(a as HTMLElement));
   }
   if (active) {
-    chrome.runtime.sendMessage({ type: "warmup" }).catch(() => {});
+    ext.runtime.sendMessage({ type: "warmup" }).catch(() => {});
     scheduleScan();
   } else {
     document.querySelectorAll(POST_SELECTOR).forEach((a) => resetArticle(a as HTMLElement));
@@ -42,9 +43,9 @@ function resetArticle(a: HTMLElement) {
 
 function classifyRemote(post: PostData): Promise<Verdict> {
   return Promise.race([
-    chrome.runtime.sendMessage({ type: "classify", post }) as Promise<Verdict>,
+    ext.runtime.sendMessage({ type: "classify", post }) as Promise<Verdict>,
     new Promise<Verdict>((resolve) =>
-      setTimeout(() => resolve({ hide: false, scores: {}, ms: TIMEOUT_MS }), TIMEOUT_MS),
+      setTimeout(() => resolve({ hide: false, scores: {}, ms: TIMEOUT_MS, error: "timeout" }), TIMEOUT_MS),
     ),
   ]);
 }
@@ -86,7 +87,7 @@ function render(article: HTMLElement, post: PostData, v: Verdict, s: Settings) {
 
   if (!counted.has(post.id)) {
     counted.add(post.id);
-    chrome.runtime.sendMessage({ type: "hidden", category: v.category }).catch(() => {});
+    ext.runtime.sendMessage({ type: "hidden", category: v.category }).catch(() => {});
   }
 
   const bar = document.createElement("div");
@@ -102,7 +103,7 @@ function render(article: HTMLElement, post: PostData, v: Verdict, s: Settings) {
     e.preventDefault();
     e.stopPropagation();
     revealed.add(post.id);
-    chrome.runtime.sendMessage({ type: "override", category: v.category as Category }).catch(() => {});
+    ext.runtime.sendMessage({ type: "override", category: v.category as Category }).catch(() => {});
     render(article, post, v, s);
   });
   bar.addEventListener("click", (e) => e.stopPropagation()); // don't open the post

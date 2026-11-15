@@ -7,7 +7,7 @@ import { join } from "node:path";
 import assert from "node:assert/strict";
 
 const root = join(import.meta.dirname, "..");
-const dist = join(root, "dist");
+const dist = join(root, "dist", "chrome");
 const outDir = join(root, "test-results");
 const screens = process.argv.includes("--screens");
 await mkdir(outDir, { recursive: true });

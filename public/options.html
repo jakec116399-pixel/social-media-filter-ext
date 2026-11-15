@@ -46,6 +46,7 @@
       .saved { color: var(--ok); font-weight: 600; opacity: 0; transition: opacity 200ms; }
       .saved.show { opacity: 1; }
       textarea { min-height: 70px; margin-top: 12px; }
+      .perm { border-color: var(--accent); background: var(--accent-soft); }
     </style>
   </head>
   <body>
@@ -60,6 +61,12 @@
           <p class="muted">Changes apply to open X tabs immediately after saving.</p>
         </div>
       </header>
+
+      <section class="card perm" id="perm" hidden>
+        <h2>Allow access to X</h2>
+        <p class="muted">Your browser needs your permission before Focus Feed can filter posts on x.com.</p>
+        <button class="btn-primary" id="grant" style="margin-top: 12px">Allow access to x.com</button>
+      </section>
 
       <section class="card">
         <h2>1. What should be hidden?</h2>

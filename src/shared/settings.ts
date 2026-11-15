@@ -1,3 +1,4 @@
+import { ext } from "./ext";
 import { DEFAULT_SETTINGS, type Settings } from "./types";
 
 export function normalizeSettings(raw: Partial<Settings> | undefined): Settings {
@@ -11,16 +12,16 @@ export function normalizeSettings(raw: Partial<Settings> | undefined): Settings 
 }
 
 export async function getSettings(): Promise<Settings> {
-  const r = await chrome.storage.sync.get("settings");
+  const r = await ext.storage.sync.get("settings");
   return normalizeSettings(r.settings as Partial<Settings> | undefined);
 }
 
 export async function saveSettings(s: Settings): Promise<void> {
-  await chrome.storage.sync.set({ settings: s });
+  await ext.storage.sync.set({ settings: s });
 }
 
 export function onSettingsChanged(cb: (s: Settings) => void): void {
-  chrome.storage.onChanged.addListener((changes, area) => {
+  ext.storage.onChanged.addListener((changes, area) => {
     if (area === "sync" && changes.settings) cb(normalizeSettings(changes.settings.newValue as Partial<Settings>));
   });
 }
