@@ -217,13 +217,17 @@ export function cleanText(text: string): string {
     .trim();
 }
 
-/** The whole post, plus its individual sentences when it has several. */
+/**
+ * The whole post, plus up to 3 of its sentences when it is genuinely long
+ * (each extra piece costs another model run).
+ */
 export function segments(clean: string): string[] {
+  if (clean.split(/\s+/).length < 15) return [clean];
   const sentences = clean
     .split(/(?<=[.!?])\s+|\n+/)
     .map((x) => x.trim())
     .filter((x) => x.split(/\s+/).length >= 4);
-  return sentences.length > 1 ? [clean, ...sentences.slice(0, 4)] : [clean];
+  return sentences.length > 1 ? [clean, ...sentences.slice(0, 3)] : [clean];
 }
 
 /** Phrasings used to turn a short goal like "fitness" into something an embedding model matches well. */
@@ -255,6 +259,8 @@ export class TextClassifier {
   private exampleKey = "";
   private embedCache = new Map<string, Float32Array>();
   private goalCache = new Map<string, Float32Array[]>();
+  /** Embeddings of recently seen posts, so re-scoring (e.g. after teaching) skips the model. */
+  private postVecs = new Map<string, Float32Array[]>();
   private embed: EmbedFn;
 
   /**
@@ -338,7 +344,12 @@ export class TextClassifier {
     await this.init();
     const sets = this.sets!;
     const clean = cleanText(text) || text;
-    const vecs = await this.embed(segments(clean));
+    let vecs = this.postVecs.get(clean);
+    if (!vecs) {
+      vecs = await this.embed(segments(clean));
+      this.postVecs.set(clean, vecs);
+      if (this.postVecs.size > 5000) this.postVecs.delete(this.postVecs.keys().next().value!);
+    }
 
     const topic = Object.fromEntries(TOPIC_IDS.map((t) => [t, { sim: -1, lead: -1 }])) as TextScores["topic"];
     const tone = Object.fromEntries(TONE_IDS.map((t) => [t, -1])) as TextScores["tone"];

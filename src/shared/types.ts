@@ -134,6 +134,8 @@ export interface Settings {
   goals: string[];
   strictness: Strictness;
   hideStyle: HideStyle;
+  /** Run the image model on photos / video thumbnails (for explicit & suggestive). */
+  checkImages: boolean;
   /** Strict mode only: hidden posts can't be unhidden (no "Show anyway", no un-teaching). */
   lockHidden: boolean;
   /** Lower-case handles (without @) whose posts are never filtered. */
@@ -155,6 +157,7 @@ export const DEFAULT_SETTINGS: Settings = {
   goals: [],
   strictness: "balanced",
   hideStyle: "collapse",
+  checkImages: true,
   lockHidden: false,
   allowAccounts: [],
 };
@@ -217,6 +220,7 @@ export type Msg =
   | { type: "override"; category: Category; id: string }
   | { type: "get-stats" }
   | { type: "get-report" }
+  | { type: "engine-info" }
   | { type: "clear-learning" }
   | { type: "feedback-collect" }
   | { type: "teach"; post: PostData; action: "hide" | "keep"; label?: LabelId; enable?: boolean }

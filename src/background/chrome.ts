@@ -2,6 +2,7 @@
 // service workers can't use the DOM/WebGL features the models need.
 import { ext } from "../shared/ext";
 import type { Msg, Verdict } from "../shared/types";
+import type { EngineInfo } from "../engine/engine";
 import { startBackground } from "./core";
 
 let creating: Promise<void> | null = null;
@@ -42,5 +43,9 @@ startBackground({
   async warmup() {
     await ensureOffscreen();
     await sendToOffscreen({ type: "warmup" });
+  },
+  async info() {
+    await ensureOffscreen();
+    return sendToOffscreen<EngineInfo>({ type: "engine-info" });
   },
 });

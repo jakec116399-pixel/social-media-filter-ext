@@ -158,12 +158,15 @@ console.log("  ✓ 'Show anyway' reveals a hidden post");
   const rev2 = r1.page.locator('article[data-smf="revealed"]', { hasText: text.slice(0, 30) });
   await rev2.locator(".smf-note-btn", { hasText: "✗" }).click();
   await rev2.locator(".smf-note-select").selectOption("keep");
+  const tTeach = Date.now();
   await rev2.locator(".smf-note-save").click();
   await r1.page.waitForFunction(
     (t) => [...document.querySelectorAll('article[data-testid="tweet"]')].some((a) => a.innerText.includes(t) && a.dataset.smf === "ok"),
     text.slice(0, 30), { timeout: 15000 },
   );
-  console.log(`  ✓ ✗ → "don't hide posts like this" corrects: "${text.slice(0, 40)}"`);
+  console.log(`  ✓ ✗ → "don't hide posts like this" corrects in ${Date.now() - tTeach} ms: "${text.slice(0, 40)}"`);
+  // No post should have been blanked during the re-check.
+  assert.equal(await r1.page.locator('article[data-smf="pending"]').count(), 0);
   await sw.evaluate(() => chrome.storage.local.remove("examples"));
 }
 
@@ -191,25 +194,49 @@ console.log("  ✓ 'Show anyway' reveals a hidden post");
   await sw.evaluate(() => chrome.storage.local.remove("examples"));
 }
 
-// Image model latency, measured inside the extension's offscreen document.
-const bench = await sw.evaluate(async () => {
+// Image model latency, measured inside the extension's AI engine. Images are passed
+// as data: URLs because the engine's own requests to pbs.twimg.com aren't routed to
+// the mock (and that host is unreachable in the test sandbox).
+const infoBefore = await sw.evaluate(() => chrome.runtime.sendMessage({ type: "engine-info" }));
+const dataUrls = Object.values(images).map((b) => "data:image/jpeg;base64," + b.toString("base64"));
+const bench = await sw.evaluate(async (urls) => {
   const t = [];
-  for (const img of ["landscape.jpg", "code.jpg", "chart.jpg"]) {
+  for (const [n, url] of urls.entries()) {
     for (let i = 0; i < 3; i++) {
       const s = performance.now();
-      await chrome.runtime.sendMessage({
+      const v = await chrome.runtime.sendMessage({
         type: "offscreen-classify",
-        post: { id: `b${img}${i}`, author: "x", text: "", imageUrls: [`https://pbs.twimg.com/media/${img}?bench=${i}`], hasLink: false, hasMedia: true },
+        post: { id: `b${n}${i}`, author: "x", text: "", imageUrls: [`${url}#${i}`], hasLink: false, hasMedia: true },
         examples: { hide: [], keep: [] },
-        settings: { enabled: true, strictness: "balanced", goals: [], allowAccounts: [], hideStyle: "collapse", onboarded: true, categories: { explicit: true, suggestive: true } },
+        settings: { enabled: true, checkImages: true, strictness: "balanced", goals: [], allowAccounts: [], hideStyle: "collapse", onboarded: true, categories: { explicit: true, suggestive: true } },
       });
+      if (v.hide) throw new Error(`harmless test image ${n} was flagged: ${JSON.stringify(v.scores)}`);
       t.push(performance.now() - s);
     }
   }
   return t;
-});
+}, dataUrls);
+// A post already hidden by its text must not run the image model.
+{
+  const before = await sw.evaluate(() => chrome.runtime.sendMessage({ type: "engine-info" }));
+  const v = await sw.evaluate((url) => chrome.runtime.sendMessage({
+    type: "offscreen-classify",
+    post: { id: "skip1", author: "x", text: "The Senate voted down the bill after the election debate", imageUrls: [url + "#skip"], hasLink: false, hasMedia: true },
+    examples: { hide: [], keep: [] },
+    settings: { enabled: true, checkImages: true, strictness: "balanced", goals: [], allowAccounts: [], hideStyle: "collapse", onboarded: true, categories: { explicit: true, suggestive: true, politics: true } },
+  }), dataUrls[0]);
+  const after = await sw.evaluate(() => chrome.runtime.sendMessage({ type: "engine-info" }));
+  assert.ok(v.hide && after.imagesChecked === before.imagesChecked, "image check should be skipped");
+  console.log("  ✓ Image check skipped for a post its text already hides");
+}
 const sorted = [...bench].sort((a, b) => a - b);
-console.log(`  Image check (fetch + AI model) in browser: median ${sorted[Math.floor(sorted.length / 2)].toFixed(0)} ms, min ${sorted[0].toFixed(0)} ms`);
+console.log(`  Image check (AI model, software graphics in this test browser): median ${sorted[Math.floor(sorted.length / 2)].toFixed(0)} ms, min ${sorted[0].toFixed(0)} ms`);
+const info = await sw.evaluate(() => chrome.runtime.sendMessage({ type: "engine-info" }));
+assert.ok(
+  info.imagesChecked - infoBefore.imagesChecked === 9 && info.imageErrors === infoBefore.imageErrors,
+  `image model must actually run on all 9 benchmark images: ${JSON.stringify(info)}`,
+);
+console.log(`  Engine: image model on ${info.imageBackend}; ${info.postsScored} posts scored, ${info.imagesChecked} images checked, ${info.imagesSkipped} skipped`);
 await r1.page.close();
 
 // 2) Off-goal mode with goals.

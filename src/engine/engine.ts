@@ -78,11 +78,12 @@ function getNsfw(): Promise<NSFWJS> {
       import("nsfwjs/models/mobilenet_v2"),
     ]);
     try {
-      await tf.setBackend("webgl");
+      if (!(await tf.setBackend("webgl"))) throw new Error("no webgl");
     } catch {
       await tf.setBackend("cpu");
     }
     await tf.ready();
+    stats.imageBackend = tf.getBackend();
     return loadNsfw("MobileNetV2", { size: 224, modelDefinitions: [MobileNetV2Model] });
   })();
   return nsfwModel;
@@ -92,10 +93,17 @@ function getNsfw(): Promise<NSFWJS> {
 async function imageScore(url: string): Promise<ImageScore> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`image ${res.status}`);
-  const bitmap = await createImageBitmap(await res.blob());
+  const blob = await res.blob();
+  // Decode straight to the model's 224×224 input size: far less work than a full-size decode.
+  const bitmap = await createImageBitmap(blob, { resizeWidth: 224, resizeHeight: 224, resizeQuality: "medium" }).catch(
+    () => createImageBitmap(blob),
+  );
   try {
     const model = await getNsfw();
+    const t0 = performance.now();
     const preds = await model.classify(bitmap as unknown as HTMLImageElement, 5);
+    stats.imageMs += performance.now() - t0;
+    stats.imagesChecked++;
     const p = (name: string) => preds.find((x) => x.className === name)?.probability ?? 0;
     return { explicit: p("Porn") + p("Hentai"), sexy: p("Sexy"), video: isVideoThumb(url) };
   } finally {
@@ -103,6 +111,37 @@ async function imageScore(url: string): Promise<ImageScore> {
   }
 }
 
+// One image at a time, so a fast scroll doesn't flood the graphics chip.
+let imageQueue: Promise<unknown> = Promise.resolve();
+function queuedImageScore(url: string): Promise<ImageScore> {
+  const run = imageQueue.then(() => imageScore(url));
+  imageQueue = run.catch(() => {});
+  return run;
+}
+
+/** Performance counters, included in the feedback report. */
+export interface EngineInfo {
+  imageBackend: string;
+  textMs: number;
+  postsScored: number;
+  imageMs: number;
+  imagesChecked: number;
+  imagesSkipped: number;
+  imageErrors: number;
+  lastImageError?: string;
+}
+const stats: EngineInfo = {
+  imageBackend: "not loaded",
+  textMs: 0,
+  postsScored: 0,
+  imageMs: 0,
+  imagesChecked: 0,
+  imagesSkipped: 0,
+  imageErrors: 0,
+};
+export function engineInfo(): EngineInfo {
+  return { ...stats };
+}
 
 // ---- Caches ----
 class Lru<V> {
@@ -133,21 +172,7 @@ export async function classify(post: PostData, settings: Settings, examples: Use
   const c = settings.categories;
   const goals = settings.goals.filter((g) => g.trim());
 
-  // Images (only if explicit or suggestive is hidden): run in parallel with the text model.
-  const imagesP =
-    (c.explicit || c.suggestive) && post.imageUrls.length
-      ? Promise.all(
-          post.imageUrls.slice(0, 4).map((u) => {
-            let p = imageCache.get(u);
-            if (!p) {
-              p = imageScore(u).catch(() => undefined);
-              imageCache.set(u, p);
-            }
-            return p;
-          }),
-        ).then((xs) => xs.filter((x): x is ImageScore => !!x))
-      : Promise.resolve([] as ImageScore[]);
-
+  // 1. Text first (fast, and post embeddings are cached).
   const words = post.text.trim().split(/\s+/).filter(Boolean).length;
   let text: TextScores | undefined;
   if (words > 0) {
@@ -156,14 +181,16 @@ export async function classify(post: PostData, settings: Settings, examples: Use
     const key = `${clf.examplesVersion.length}:${hashString(clf.examplesVersion)}\u0000${goals.join("\n")}\u0000${post.text}`;
     let p = textCache.get(key);
     if (!p) {
+      const t1 = performance.now();
       p = clf.score(post.text, goals);
       textCache.set(key, p);
-      p.catch(() => textCache.delete(key)); // don't cache failures
+      p.then(() => {
+        stats.textMs += performance.now() - t1;
+        stats.postsScored++;
+      }).catch(() => textCache.delete(key)); // don't cache failures
     }
     text = await p;
   }
-  const images = await imagesP;
-  const ms = Math.round(performance.now() - t0);
 
   // Labels from the AI (topics + tones), keyword rules, and the image model.
   const enabled = { ...c, offgoal: c.offgoal && words >= 3 && goals.length > 0 };
@@ -178,10 +205,43 @@ export async function classify(post: PostData, settings: Settings, examples: Use
   if (labels.includes("explicit") || labels.includes("suggestive")) context = "sexual";
   else if (text) {
     const top = topTopic(text);
-    if (top !== "explicit" && top !== "suggestive" && text.topic[top].lead >= 0.04 && text.topic[top].sim >= 0.3) context = "other-topic";
+    if (top !== "explicit" && top !== "suggestive" && text.topic[top].lead >= 0.04 && text.topic[top].sim >= 0.3)
+      context = "other-topic";
   }
+  // 2. Images, only when they could change the outcome: explicit/suggestive is
+  //    hidden, and the text hasn't already hidden the post. Video thumbnails are
+  //    skipped when the text is clearly about something else.
+  const textHides = !keep && (labels.some((l) => c[l]) || decision.hiddenBy.includes("offgoal"));
+  let images: ImageScore[] = [];
+  if ((c.explicit || c.suggestive) && settings.checkImages && !keep && !textHides && post.imageUrls.length) {
+    const urls = post.imageUrls.filter((u) => !(context === "other-topic" && isVideoThumb(u))).slice(0, 2);
+    stats.imagesSkipped += post.imageUrls.length - urls.length;
+    const results = await Promise.all(
+      urls.map((u) => {
+        let p = imageCache.get(u);
+        if (!p) {
+          p = queuedImageScore(u).catch((e) => {
+            stats.imageErrors++;
+            stats.lastImageError = String(e).slice(0, 200);
+            console.warn("[Focus Feed] image check failed:", e);
+            return undefined;
+          });
+          imageCache.set(u, p);
+        }
+        return p;
+      }),
+    );
+    images = results.filter((x): x is ImageScore => !!x);
+  } else if (post.imageUrls.length) {
+    stats.imagesSkipped += post.imageUrls.length;
+  }
+  const ms = Math.round(performance.now() - t0);
   const imageHits = images.map((i) => judgeImage(i, settings.strictness, context));
-  const imageKind = imageHits.includes("explicit") ? "explicit" : imageHits.includes("suggestive") ? "suggestive" : undefined;
+  const imageKind = imageHits.includes("explicit")
+    ? "explicit"
+    : imageHits.includes("suggestive")
+      ? "suggestive"
+      : undefined;
   if (!keep) {
     if (imageKind) {
       // The image decides between explicit and suggestive; it leads the labels.

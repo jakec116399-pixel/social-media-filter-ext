@@ -73,7 +73,7 @@ X page ──► content script ─── keyword rules (instant) ──► hide
               │
               └─► background ──► AI engine (Chrome: offscreen document; Firefox: background page)
                                           ├─ text: MiniLM sentence embeddings (~3 ms/post)
-                                          └─ images: NSFWJS MobileNetV2 (~100–200 ms/image)
+                                          └─ images: NSFWJS MobileNetV2 (fast on a GPU; ~250–300 ms/image in software)
 ```
 
 1. **Find posts.** `src/content/x-adapter.ts` knows X's page structure. When X changes its markup, this is the only file to update.
@@ -81,7 +81,9 @@ X page ──► content script ─── keyword rules (instant) ──► hide
 3. **Keywords** (`src/shared/heuristics.ts`). High-precision rules for obvious cases.
 4. **Text AI** (`src/shared/textModel.ts`; example posts in `src/shared/prototypes.ts`). The post is cleaned (links, @mentions and hashtags removed), embedded, and compared with example posts for every label, averaging the 3 closest matches. **Topics compete**: a post's topic is the one it's closest to, so topics nobody hides still give every post a sensible home instead of forcing it into the nearest hidden category. **Tones** are judged separately, against plainly written posts. Long posts are also scored sentence by sentence. Embeddings of the built-in examples are precomputed at build time (`scripts/embed-prototypes.ts`) for fast startup. Your right-click examples are added to the sets.
 5. **Image AI** (`src/engine/engine.ts`, rules in `src/shared/imagePolicy.ts`). NSFWJS MobileNetV2 checks photos and video thumbnails when Explicit or Suggestive is on. Its Porn/Hentai scores give **Explicit**, which hides at moderate confidence. Its "Sexy" score gives **Suggestive**, which needs high confidence, because it also fires on face close-ups and dark frames. Video thumbnails need more confidence, and the post's text is used as context: clearly about another topic means a higher bar, sexualised text means a lower one.
-6. **Cache.** Results are cached per post, text and image URL.
+6. **Cache and skip.** Post embeddings, verdicts and image results are cached, so re-checking after you teach takes about 100 ms. Images are only checked when they could change the outcome: Explicit or Suggestive is on, image checks are enabled, and the text hasn't already hidden the post. Video thumbnails are skipped when the text is clearly about something else. At most 2 images per post are checked, one at a time, decoded straight to the model's 224×224 size.
+
+**Performance diagnostics.** The settings page says whether the image model is using your graphics chip ("webgl") or running on the processor (slow and warm). **Copy feedback report** includes the backend, average text and image times, and any image errors. Image checks can be switched off in Settings → Performance.
 
 ## Development
 

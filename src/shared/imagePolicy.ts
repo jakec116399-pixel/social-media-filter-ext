@@ -35,9 +35,15 @@ export function isVideoThumb(url: string): boolean {
 }
 
 /** Is this image explicit, suggestive, or neither, given the strictness and the post's text? */
-export function judgeImage(img: ImageScore, strictness: Strictness, context: TextContext): "explicit" | "suggestive" | undefined {
+export function judgeImage(
+  img: ImageScore,
+  strictness: Strictness,
+  context: TextContext,
+): "explicit" | "suggestive" | undefined {
   const base = IMAGE_POLICY[strictness];
-  const shift = (img.video ? VIDEO_PENALTY : 0) + (context === "other-topic" ? CONTEXT_SHIFT : context === "sexual" ? -CONTEXT_SHIFT : 0);
+  const shift =
+    (img.video ? VIDEO_PENALTY : 0) +
+    (context === "other-topic" ? CONTEXT_SHIFT : context === "sexual" ? -CONTEXT_SHIFT : 0);
   const explicitT = Math.min(0.98, base.explicit + shift);
   const sexyT = Math.min(0.99, base.sexy + shift);
   if (img.explicit >= explicitT) return "explicit";

@@ -129,6 +129,10 @@ getSettings().then((loaded) => {
   renderGoals();
   renderRadios();
   $<HTMLTextAreaElement>("allow").value = s.allowAccounts.map((h) => `@${h}`).join("\n");
+  const ci = $<HTMLInputElement>("check-images");
+  ci.checked = s.checkImages;
+  ci.onchange = () => (s.checkImages = ci.checked);
+  void showPerf();
 });
 
 // Firefox may not grant site access at install time; ask for it here.
@@ -141,3 +145,16 @@ $("grant").addEventListener("click", async () => {
   await checkPermission();
 });
 void checkPermission();
+
+/** Tell the user if the image model is running without graphics acceleration. */
+async function showPerf() {
+  const info = (await ext.runtime.sendMessage({ type: "engine-info" }).catch(() => undefined)) as
+    | { imageBackend: string; imageMs: number; imagesChecked: number }
+    | undefined;
+  if (!info || !info.imagesChecked) return;
+  const avg = Math.round(info.imageMs / info.imagesChecked);
+  const gpu = info.imageBackend === "webgl";
+  $("perf-info").textContent = gpu
+    ? `Image checks use your graphics chip (~${avg} ms per image).`
+    : `⚠ Image checks are running on the processor without graphics acceleration (~${avg} ms per image). This is slow and can make your computer warm; consider turning them off.`;
+}

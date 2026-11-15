@@ -1,5 +1,6 @@
 // Shared background logic for Chrome and Firefox: routes classification
 // requests to the AI engine, keeps daily stats and opens onboarding.
+import type { EngineInfo } from "../engine/engine";
 import { ext } from "../shared/ext";
 import { getSettings, saveSettings, today } from "../shared/settings";
 import {
@@ -18,6 +19,7 @@ import {
 } from "../shared/types";
 
 export interface Backend {
+  info(): Promise<EngineInfo>;
   classify(post: PostData, settings: Settings, examples: UserExamples): Promise<Verdict>;
   warmup(): Promise<void>;
 }
@@ -81,13 +83,19 @@ async function addLog(entry: DecisionLog) {
   logTimer = setTimeout(() => void ext.storage.local.set({ decisions: l }), 2000);
 }
 
-async function buildReport(): Promise<string> {
+async function buildReport(backend: Backend): Promise<string> {
+  const engine = await backend.info().catch(() => undefined);
   const settings = await getSettings();
   const l = await getLog();
   return JSON.stringify(
     {
       version: ext.runtime.getManifest().version,
       settings: { ...settings, allowAccounts: settings.allowAccounts.length },
+      engine: engine && {
+        ...engine,
+        avgTextMs: engine.postsScored ? Math.round(engine.textMs / engine.postsScored) : null,
+        avgImageMs: engine.imagesChecked ? Math.round(engine.imageMs / engine.imagesChecked) : null,
+      },
       taught: await getExamples(),
       decisions: l.slice(-150).map(({ id: _id, ...d }) => d),
     },
@@ -225,8 +233,11 @@ export function startBackground(backend: Backend): void {
       case "teach":
         teach(msg.post, msg.action, msg.label, msg.enable).then(() => sendResponse(true));
         return true;
+      case "engine-info":
+        backend.info().then(sendResponse, () => sendResponse(undefined));
+        return true;
       case "get-report":
-        buildReport().then(sendResponse);
+        buildReport(backend).then(sendResponse);
         return true;
       case "clear-learning":
         Promise.all([ext.storage.local.remove(["examples", "decisions"]), (log = [])])

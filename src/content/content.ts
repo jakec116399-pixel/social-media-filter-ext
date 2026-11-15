@@ -32,10 +32,7 @@ function applySettings(s: Settings) {
   settings = s;
   const active = s.enabled && anyCategory(s);
   ROOT.classList.toggle("smf-off", !active);
-  if (changed) {
-    verdicts.clear();
-    document.querySelectorAll(POST_SELECTOR).forEach((a) => resetArticle(a as HTMLElement));
-  }
+  if (changed) markAllStale();
   if (active) {
     ext.runtime.sendMessage({ type: "warmup" }).catch(() => {});
     scheduleScan();
@@ -44,7 +41,21 @@ function applySettings(s: Settings) {
   }
 }
 
+/**
+ * Re-check every post on the page (after teaching or a settings change)
+ * without blanking them: each keeps its current state until its new verdict
+ * arrives, so the feed doesn't flash.
+ */
+function markAllStale() {
+  verdicts.clear();
+  document.querySelectorAll<HTMLElement>(POST_SELECTOR).forEach((a) => {
+    if (a.dataset.smf) a.dataset.smfStale = "1";
+  });
+  scheduleScan();
+}
+
 function resetArticle(a: HTMLElement) {
+  delete a.dataset.smfStale;
   delete a.dataset.smf;
   delete a.dataset.smfId;
   a.querySelector(":scope > .smf-bar")?.remove();
@@ -239,17 +250,18 @@ async function processArticle(article: HTMLElement) {
   const s = settings;
   if (!s || !s.enabled || !anyCategory(s)) return;
   // Fast path: already handled this exact post (most calls end here).
-  if (article.dataset.smf && article.dataset.smfId && article.dataset.smfId === quickPostId(article)) return;
+  const stale = article.dataset.smfStale === "1";
+  if (!stale && article.dataset.smf && article.dataset.smfId && article.dataset.smfId === quickPostId(article)) return;
   const post = extractPost(article);
   if (!post) {
     article.dataset.smf = "ok"; // nothing to judge
     return;
   }
-  if (article.dataset.smfId === post.id && article.dataset.smf && article.dataset.smf !== "pending") return;
-  if (article.dataset.smfId === post.id && article.dataset.smf === "pending") return; // already in flight
+  if (inFlight.has(post.id) && article.dataset.smfId === post.id) return; // already being checked
+  if (!stale && article.dataset.smfId === post.id && article.dataset.smf && article.dataset.smf !== "pending") return;
 
   // Wait briefly for images so the image model sees them.
-  if ((s.categories.explicit || s.categories.suggestive) && mediaPending(article)) {
+  if (!stale && (s.categories.explicit || s.categories.suggestive) && s.checkImages && mediaPending(article)) {
     setTimeout(() => scheduleScan(), 300);
     if (!article.dataset.smfWaits || Number(article.dataset.smfWaits) < 5) {
       article.dataset.smfWaits = String(Number(article.dataset.smfWaits ?? 0) + 1);
@@ -257,12 +269,23 @@ async function processArticle(article: HTMLElement) {
     }
   }
 
+  // A re-check keeps the post as it is until the new verdict arrives.
+  const recheck = stale && article.dataset.smfId === post.id && article.dataset.smf !== "pending";
+  delete article.dataset.smfStale;
   article.dataset.smfId = post.id;
-  article.dataset.smf = "pending";
-  const v = await verdictFor(post, s);
+  if (!recheck) article.dataset.smf = "pending";
+  inFlight.add(post.id);
+  let v: Verdict;
+  try {
+    v = await verdictFor(post, s);
+  } finally {
+    inFlight.delete(post.id);
+  }
   if (settings !== s) return; // settings changed meanwhile; a rescan will handle it
   render(article, post, v, s);
 }
+
+const inFlight = new Set<string>();
 
 // Performance counters, exposed on <html> only when a test sets data-smf-debug.
 let scanMs = 0;
@@ -318,9 +341,7 @@ ext.runtime.onMessage.addListener((msg: { type: string }, _sender, sendResponse)
   }
   if (msg.type === "rescan") {
     // The user taught something new: re-check every post on the page.
-    verdicts.clear();
-    document.querySelectorAll(POST_SELECTOR).forEach((a) => resetArticle(a as HTMLElement));
-    scheduleScan();
+    markAllStale();
   }
   return false;
 });
