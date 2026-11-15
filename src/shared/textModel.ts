@@ -1,43 +1,68 @@
-// Tier 2: zero-shot text classification with sentence embeddings.
+// Zero-shot text classification with sentence embeddings.
 //
-// Each category is described by example posts (src/shared/prototypes.ts). A
-// post is cleaned, embedded, and compared (cosine similarity) with every
-// example. Its score for a category is how much closer it is to that
-// category's best matches than to ordinary, neutral posts. Long posts are also
-// scored sentence by sentence, so one political line in a long post counts.
-// No training data or per-post API calls needed.
-import { NEUTRAL, PROTOTYPES } from "./prototypes.ts";
-import type { Category, Strictness, TopicCategory, UserExamples } from "./types";
-
-export { NEUTRAL, PROTOTYPES };
+// Labels and their example posts live in src/shared/prototypes.ts.
+//  - Topics (what a post is about) compete with each other: a post's topic is
+//    the one whose examples it is closest to, and a topic only counts if it is
+//    the best (or nearly the best) match. Having many topics, including ones
+//    nobody hides, gives every post a sensible home instead of forcing it into
+//    the nearest hidden category.
+//  - Tones (how a post is written) are judged separately: how much closer the
+//    post is to, say, rage-bait examples than to plainly written posts.
+// Posts are cleaned (links, @mentions, hashtags), and long posts are also
+// scored sentence by sentence. No per-post API calls.
+import { PLAIN, TONE_PROTOTYPES, TOPIC_PROTOTYPES } from "./prototypes.ts";
+import {
+  TONE_IDS,
+  TOPIC_IDS,
+  type Category,
+  type LabelId,
+  type Strictness,
+  type ToneId,
+  type TopicId,
+  type UserExamples,
+} from "./types.ts";
 
 /** Returns L2-normalised embeddings, one per input text. */
 export type EmbedFn = (texts: string[]) => Promise<Float32Array[]>;
 
-export type { TopicCategory };
-export const TOPIC_CATEGORIES = Object.keys(PROTOTYPES) as TopicCategory[];
-
 export interface Thresholds {
-  /** Minimum (category similarity − neutral similarity) margin to hide. */
-  margin: Record<TopicCategory, number>;
+  /** Topic counts if its similarity is within this of the best topic (negative = allow near-ties). */
+  topicLead: number;
+  /** ...and its similarity is at least this. */
+  topicFloor: number;
+  /** Sexualised is stricter, because false alarms on it are upsetting. */
+  sexualLead: number;
+  sexualFloor: number;
+  /** Tone counts if it beats plainly written posts by this margin. */
+  tone: Record<ToneId, number>;
   /** Off-goal: hide if relevance to every goal is below this. */
   goalRelevance: number;
 }
 
-// Calibrated on tests/data/labeled-posts.json with `npm run eval`.
-// Calibrated with `npm run eval -- --sweep`, mostly on tests/data/realistic-posts.json
-// (messy, real-looking posts that were not used to write the prototypes).
+// Calibrated with `npm run eval -- --sweep` on tests/data/*.json.
 export const THRESHOLDS: Record<Strictness, Thresholds> = {
   relaxed: {
-    margin: { sexualised: 0.12, clickbait: 0.1, politics: 0.1, gossip: 0.1 },
+    topicLead: 0.03,
+    topicFloor: 0.25,
+    sexualLead: 0.08,
+    sexualFloor: 0.32,
+    tone: { ragebait: 0.13, engagementbait: 0.13, vaguepost: 0.15, doom: 0.15 },
     goalRelevance: 0.2,
   },
   balanced: {
-    margin: { sexualised: 0.08, clickbait: 0.06, politics: 0.06, gossip: 0.06 },
+    topicLead: 0.0,
+    topicFloor: 0.22,
+    sexualLead: 0.05,
+    sexualFloor: 0.3,
+    tone: { ragebait: 0.1, engagementbait: 0.1, vaguepost: 0.12, doom: 0.12 },
     goalRelevance: 0.24,
   },
   strict: {
-    margin: { sexualised: 0.06, clickbait: 0.02, politics: 0.02, gossip: 0.02 },
+    topicLead: -0.02,
+    topicFloor: 0.2,
+    sexualLead: 0.02,
+    sexualFloor: 0.27,
+    tone: { ragebait: 0.07, engagementbait: 0.07, vaguepost: 0.09, doom: 0.09 },
     goalRelevance: 0.28,
   },
 };
@@ -171,6 +196,7 @@ export function dot(a: Float32Array, b: Float32Array): number {
 
 /** Mean of the k highest similarities: steadier than trusting the single closest example. */
 function topKSim(v: Float32Array, set: Float32Array[], k = 3): number {
+  if (!set.length) return -1;
   const sims = set.map((p) => dot(v, p)).sort((a, b) => b - a);
   const n = Math.min(k, sims.length);
   let sum = 0;
@@ -207,43 +233,65 @@ export function goalPhrasings(goal: string): string[] {
 }
 
 export interface TextScores {
-  /** Margin over neutral for each topic category (higher = more likely). */
-  margin: Record<TopicCategory, number>;
-  /** Near-duplicate of a post the user taught: hide (with category) or keep. */
-  taught?: { action: "hide"; category: TopicCategory } | { action: "keep" };
+  /** Per topic: similarity, and lead over the best other topic (≥ 0 means it is the top topic). */
+  topic: Record<TopicId, { sim: number; lead: number }>;
+  /** Per tone: margin over plainly written posts. */
+  tone: Record<ToneId, number>;
   /** Best similarity to any of the user's goals (undefined when no goals). */
   goalRelevance?: number;
+  /** Near-duplicate of a post the user taught: hide (with label) or keep. */
+  taught?: { action: "hide"; label: LabelId } | { action: "keep" };
 }
 
+type VecSets = { topic: Record<TopicId, Float32Array[]>; tone: Record<ToneId, Float32Array[]>; plain: Float32Array[] };
+
 export class TextClassifier {
-  private baseProto?: Record<TopicCategory, Float32Array[]>;
-  private baseNeutral?: Float32Array[];
-  private protoVecs?: Record<TopicCategory, Float32Array[]>;
-  private neutralVecs?: Float32Array[];
-  private userHide: { category: TopicCategory; v: Float32Array }[] = [];
+  private base?: VecSets;
+  private sets?: VecSets;
+  private userHide: { label: LabelId; v: Float32Array }[] = [];
   private userKeep: Float32Array[] = [];
   private exampleKey = "";
   private embedCache = new Map<string, Float32Array>();
   private goalCache = new Map<string, Float32Array[]>();
-
   private embed: EmbedFn;
 
-  constructor(embed: EmbedFn) {
+  /**
+   * @param precomputed embeddings computed at build time (scripts/embed-prototypes.ts),
+   *   so startup doesn't have to embed hundreds of example posts.
+   */
+  constructor(embed: EmbedFn, precomputed?: Map<string, Float32Array>) {
     this.embed = embed;
+    if (precomputed) for (const [t, v] of precomputed) this.embedCache.set(t, v);
+  }
+
+  /** Embed texts, reusing cached / precomputed vectors. */
+  private async embedCached(texts: string[]): Promise<Float32Array[]> {
+    const missing = [...new Set(texts.filter((t) => !this.embedCache.has(t)))];
+    if (missing.length) {
+      const vecs = await this.embed(missing);
+      missing.forEach((t, i) => this.embedCache.set(t, vecs[i]));
+    }
+    return texts.map((t) => this.embedCache.get(t)!);
   }
 
   async init(): Promise<void> {
-    if (this.protoVecs) return;
-    const all = TOPIC_CATEGORIES.flatMap((c) => [...PROTOTYPES[c]]);
-    const vecs = await this.embed([...all, ...NEUTRAL]);
-    const out = {} as Record<TopicCategory, Float32Array[]>;
+    if (this.base) return;
+    const groups: [string, string[]][] = [
+      ...TOPIC_IDS.map((t) => [`topic:${t}`, TOPIC_PROTOTYPES[t]] as [string, string[]]),
+      ...TONE_IDS.map((t) => [`tone:${t}`, TONE_PROTOTYPES[t]] as [string, string[]]),
+      ["plain", PLAIN],
+    ];
+    const vecs = await this.embedCached(groups.flatMap(([, texts]) => texts));
+    const out = { topic: {}, tone: {}, plain: [] } as unknown as VecSets;
     let i = 0;
-    for (const c of TOPIC_CATEGORIES) {
-      out[c] = vecs.slice(i, i + PROTOTYPES[c].length);
-      i += PROTOTYPES[c].length;
+    for (const [key, texts] of groups) {
+      const slice = vecs.slice(i, i + texts.length);
+      i += texts.length;
+      if (key === "plain") out.plain = slice;
+      else if (key.startsWith("topic:")) out.topic[key.slice(6) as TopicId] = slice;
+      else out.tone[key.slice(5) as ToneId] = slice;
     }
-    this.baseNeutral = this.neutralVecs = vecs.slice(i);
-    this.baseProto = this.protoVecs = out;
+    this.base = this.sets = out;
   }
 
   /** Version key for the current user examples (changes when they change). */
@@ -251,26 +299,26 @@ export class TextClassifier {
     return this.exampleKey;
   }
 
-  /** Add the user's taught examples to the category and neutral sets. */
+  /** Add the user's taught examples to the label sets. */
   async setUserExamples(ex: UserExamples): Promise<void> {
     await this.init();
     const key = JSON.stringify(ex);
     if (key === this.exampleKey) return;
     const texts = [...ex.hide.map((h) => cleanText(h.text)), ...ex.keep.map(cleanText)];
-    const missing = [...new Set(texts.filter((t) => t && !this.embedCache.has(t)))];
-    if (missing.length) {
-      const vecs = await this.embed(missing);
-      missing.forEach((t, i) => this.embedCache.set(t, vecs[i]));
-    }
+    await this.embedCached(texts.filter(Boolean));
     const vec = (t: string) => this.embedCache.get(cleanText(t));
-    this.userHide = ex.hide.flatMap((h) => (vec(h.text) ? [{ category: h.category, v: vec(h.text)! }] : []));
+    this.userHide = ex.hide.flatMap((h) => {
+      const v = vec(h.text);
+      return v && (TOPIC_IDS as string[]).concat(TONE_IDS).includes(h.category) ? [{ label: h.category, v }] : [];
+    });
     this.userKeep = ex.keep.flatMap((t) => (vec(t) ? [vec(t)!] : []));
-    const proto = {} as Record<TopicCategory, Float32Array[]>;
-    for (const c of TOPIC_CATEGORIES) {
-      proto[c] = [...this.baseProto![c], ...this.userHide.filter((h) => h.category === c).map((h) => h.v)];
-    }
-    this.protoVecs = proto;
-    this.neutralVecs = [...this.baseNeutral!, ...this.userKeep];
+    const b = this.base!;
+    const extra = (id: LabelId) => this.userHide.filter((h) => h.label === id).map((h) => h.v);
+    this.sets = {
+      topic: Object.fromEntries(TOPIC_IDS.map((t) => [t, [...b.topic[t], ...extra(t)]])) as VecSets["topic"],
+      tone: Object.fromEntries(TONE_IDS.map((t) => [t, [...b.tone[t], ...extra(t)]])) as VecSets["tone"],
+      plain: [...b.plain, ...this.userKeep],
+    };
     this.exampleKey = key;
   }
 
@@ -278,7 +326,7 @@ export class TextClassifier {
     const key = goals.join("\n");
     let v = this.goalCache.get(key);
     if (!v) {
-      v = await this.embed(goals.flatMap(goalTexts));
+      v = await this.embedCached(goals.flatMap(goalTexts));
       this.goalCache.set(key, v);
     }
     return v;
@@ -286,72 +334,118 @@ export class TextClassifier {
 
   async score(text: string, goals: string[] = []): Promise<TextScores> {
     await this.init();
+    const sets = this.sets!;
     const clean = cleanText(text) || text;
-    const segs = segments(clean);
-    const vecs = await this.embed(segs);
-    const margin = {} as Record<TopicCategory, number>;
-    for (const c of TOPIC_CATEGORIES) margin[c] = -1;
+    const vecs = await this.embed(segments(clean));
+
+    const topic = Object.fromEntries(TOPIC_IDS.map((t) => [t, { sim: -1, lead: -1 }])) as TextScores["topic"];
+    const tone = Object.fromEntries(TONE_IDS.map((t) => [t, -1])) as TextScores["tone"];
     for (const v of vecs) {
-      const neutral = topKSim(v, this.neutralVecs!);
-      for (const c of TOPIC_CATEGORIES) {
-        margin[c] = Math.max(margin[c], topKSim(v, this.protoVecs![c]) - neutral);
+      const sims = TOPIC_IDS.map((t) => topKSim(v, sets.topic[t]));
+      for (let i = 0; i < TOPIC_IDS.length; i++) {
+        let bestOther = -1;
+        for (let j = 0; j < sims.length; j++) if (j !== i && sims[j] > bestOther) bestOther = sims[j];
+        const lead = sims[i] - bestOther;
+        const cur = topic[TOPIC_IDS[i]];
+        if (lead > cur.lead) topic[TOPIC_IDS[i]] = { sim: sims[i], lead };
       }
+      const plain = topKSim(v, sets.plain);
+      for (const t of TONE_IDS) tone[t] = Math.max(tone[t], topKSim(v, sets.tone[t]) - plain);
     }
+
     // A post very similar to one the user explicitly taught follows that choice.
     let taught: TextScores["taught"];
     const NEAR = 0.82;
-    for (const v of vecs.slice(0, 1)) {
-      let best = NEAR;
-      for (const h of this.userHide) {
-        const d = dot(v, h.v);
-        if (d >= best) {
-          best = d;
-          taught = { action: "hide", category: h.category };
-        }
-      }
-      for (const k of this.userKeep) {
-        const d = dot(v, k);
-        if (d >= best) {
-          best = d;
-          taught = { action: "keep" };
-        }
+    let best = NEAR;
+    for (const h of this.userHide) {
+      const d = dot(vecs[0], h.v);
+      if (d >= best) {
+        best = d;
+        taught = { action: "hide", label: h.label };
       }
     }
+    for (const k of this.userKeep) {
+      const d = dot(vecs[0], k);
+      if (d >= best) {
+        best = d;
+        taught = { action: "keep" };
+      }
+    }
+
     const cleanGoals = goals.map((g) => g.trim()).filter(Boolean);
     let goalRelevance: number | undefined;
     if (cleanGoals.length) {
       const gv = await this.goalVecs(cleanGoals);
       goalRelevance = Math.max(...vecs.map((v) => topKSim(v, gv, 2)));
     }
-    return { margin, goalRelevance, taught };
+    return { topic, tone, goalRelevance, taught };
   }
 }
 
-/** Turn scores into the category (if any) that should hide the post. */
-export function decideText(
-  s: TextScores,
-  enabled: Record<Category, boolean>,
-  strictness: Strictness,
-): { category: Category; score: number } | undefined {
+export interface TextDecision {
+  /** Every label the post was recognised as, strongest first (regardless of settings). */
+  labels: LabelId[];
+  /** Enabled labels (or "offgoal") that hide it. Empty = show. */
+  hiddenBy: Category[];
+}
+
+/** Which labels apply at this strictness, and which of them the user hides. */
+export function decideText(s: TextScores, enabled: Record<Category, boolean>, strictness: Strictness): TextDecision {
   const t = THRESHOLDS[strictness];
-  if (s.taught?.action === "keep") return undefined;
-  if (s.taught?.action === "hide" && enabled[s.taught.category]) return { category: s.taught.category, score: 1 };
-  // Among enabled categories that pass their threshold, pick the strongest match.
-  let best: { category: Category; score: number } | undefined;
-  for (const c of TOPIC_CATEGORIES) {
-    if (!enabled[c] || s.margin[c] < t.margin[c]) continue;
-    if (!best || s.margin[c] > best.score) best = { category: c, score: s.margin[c] };
+  const found: { id: LabelId; strength: number }[] = [];
+  for (const id of TOPIC_IDS) {
+    const { sim, lead } = s.topic[id];
+    const [needLead, needFloor] = id === "sexualised" ? [t.sexualLead, t.sexualFloor] : [t.topicLead, t.topicFloor];
+    if (lead >= needLead && sim >= needFloor) found.push({ id, strength: lead + 0.1 });
   }
-  if (best) return best;
-  if (enabled.offgoal && s.goalRelevance !== undefined && s.goalRelevance < t.goalRelevance) {
-    return { category: "offgoal", score: t.goalRelevance - s.goalRelevance };
+  for (const id of TONE_IDS) {
+    if (s.tone[id] >= t.tone[id]) found.push({ id, strength: s.tone[id] - t.tone[id] });
   }
-  return undefined;
+  if (s.taught?.action === "hide" && !found.some((f) => f.id === (s.taught as { label: LabelId }).label)) {
+    found.unshift({ id: s.taught.label, strength: 1 });
+  }
+  found.sort((a, b) => b.strength - a.strength);
+  const labels = found.map((f) => f.id);
+  if (s.taught?.action === "keep") return { labels, hiddenBy: [] };
+  const hiddenBy: Category[] = labels.filter((id) => enabled[id]);
+  if (!hiddenBy.length && enabled.offgoal && s.goalRelevance !== undefined && s.goalRelevance < t.goalRelevance) {
+    hiddenBy.push("offgoal");
+  }
+  return { labels, hiddenBy };
 }
 
-/** The single most likely topic category (for explaining decisions). */
-export function topCategory(s: TextScores): { category: TopicCategory; margin: number } {
-  let best = TOPIC_CATEGORIES[0];
-  for (const c of TOPIC_CATEGORIES) if (s.margin[c] > s.margin[best]) best = c;
-  return { category: best, margin: s.margin[best] };
+/** The post's single closest topic (for display and evaluation). */
+export function topTopic(s: TextScores): TopicId {
+  let best = TOPIC_IDS[0];
+  for (const t of TOPIC_IDS) if (s.topic[t].sim > s.topic[best].sim) best = t;
+  return best;
+}
+
+/** Every fixed text whose embedding can be computed ahead of time. */
+export function fixedTexts(): string[] {
+  return [
+    ...new Set([
+      ...TOPIC_IDS.flatMap((t) => TOPIC_PROTOTYPES[t]),
+      ...TONE_IDS.flatMap((t) => TONE_PROTOTYPES[t]),
+      ...PLAIN,
+      ...GOAL_PRESETS.flatMap((p) => [...goalPhrasings(p.label), ...p.examples]),
+    ]),
+  ];
+}
+
+/** Serialised form of precomputed embeddings (public/prototype-vectors.json). */
+export interface PrecomputedFile {
+  model: string;
+  dim: number;
+  texts: string[];
+  /** base64 of a Float32Array of texts.length * dim values. */
+  data: string;
+}
+
+export function decodePrecomputed(file: PrecomputedFile): Map<string, Float32Array> {
+  const bin = atob(file.data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const all = new Float32Array(bytes.buffer);
+  return new Map(file.texts.map((t, i) => [t, all.slice(i * file.dim, (i + 1) * file.dim)]));
 }

@@ -18,16 +18,26 @@ const POSTS = [
   { user: "spicyacc", name: "🍒", text: "My new photoshoot is too hot for here 🔥 check my bio for the full set", expect: "sexualised" },
   { user: "pundit", name: "Political Pundit", text: "The opposition leader's speech in parliament today was a masterclass in hypocrisy", expect: "politics" },
   { user: "lifter", name: "Strong Sam", text: "Finally benched 100kg after 8 months of consistent training 💪", img: "chart.jpg", expect: "show", goal: true },
-  { user: "vague", name: "anon", text: "some people really think they're untouchable lol", expect: "clickbait" },
+  { user: "vague", name: "anon", text: "some people really think they're untouchable lol", expect: "vaguepost" },
   { user: "popcorn", name: "Pop Culture Daily", text: "The pop star and her actor boyfriend reportedly split after two years together", expect: "gossip" },
   { user: "hiker", name: "Trail Notes", text: "Sunrise from the summit this morning", img: "landscape.jpg", expect: "show", goal: false },
-  { user: "bait", name: "Viral", text: "Only 2% of people can find the mistake in this picture. Can you?", expect: "clickbait" },
+  { user: "bait", name: "Viral", text: "Only 2% of people can find the mistake in this picture. Can you?", expect: "engagementbait" },
   // Arrive later (infinite scroll)
   { user: "rustlang", name: "Rust Learner", text: "Wrote my first async web server in Rust, the borrow checker finally clicked", img: "code.jpg", expect: "show", goal: true },
   { user: "news", name: "Politics Now", text: "Polls tighten as both candidates make their final push before Tuesday's vote", expect: "politics" },
   { user: "foodie", name: "Weeknight Cook", text: "15 minute chickpea curry, recipe in the replies", expect: "show", goal: false },
   { user: "drama", name: "Tea Spill", text: "This influencer's fake apology video is getting ratioed into oblivion", expect: "gossip" },
 ];
+
+// Expected label shown on the "Hidden · …" bar for each category.
+const LABEL_TEXT = {
+  sexualised: /Sexualised|Suggestive/, politics: /Politics/, gossip: /Celebrity/, vaguepost: /Vagueposting/,
+  engagementbait: /Engagement bait/,
+};
+const NONE = Object.fromEntries(
+  ["sexualised", "politics", "news", "gossip", "sports", "entertainment", "memes", "money", "tech", "learning", "fitness",
+   "lifestyle", "personal", "relationships", "ads", "ragebait", "engagementbait", "vaguepost", "doom", "offgoal"].map((k) => [k, false]),
+);
 
 const fixture = await readFile(join(root, "tests/fixtures/x-home.html"), "utf8");
 const images = {};
@@ -66,7 +76,7 @@ async function setSettings(settings) {
 }
 const base = {
   enabled: true, onboarded: true, strictness: "balanced", hideStyle: "collapse", allowAccounts: [], goals: [],
-  categories: { sexualised: true, clickbait: true, politics: true, gossip: true, offgoal: false },
+  categories: { ...NONE, sexualised: true, politics: true, gossip: true, ragebait: true, engagementbait: true, vaguepost: true },
 };
 
 async function runFeed(label, settings, expectFn) {
@@ -94,7 +104,10 @@ async function runFeed(label, settings, expectFn) {
   results.forEach((r, i) => {
     const want = expectFn(POSTS[i]);
     const got = r.state === "hidden" ? "hidden" : "shown";
-    const ok = want === got;
+    // When hidden for a topic/tone, the bar must name the right label.
+    const labelOk =
+      got !== "hidden" || settings.categories.offgoal || !LABEL_TEXT[POSTS[i].expect] || LABEL_TEXT[POSTS[i].expect].test(r.reason);
+    const ok = want === got && labelOk;
     if (ok) correct++;
     console.log(`  ${ok ? "✓" : "✗"} ${got.padEnd(6)} ${r.reason.padEnd(38)} ${POSTS[i].text.slice(0, 60)}`);
   });
@@ -103,7 +116,7 @@ async function runFeed(label, settings, expectFn) {
 }
 
 // 1) Topic filters on.
-const r1 = await runFeed("Sexualised + clickbait + politics + gossip", base, (p) => (p.expect === "show" ? "shown" : "hidden"));
+const r1 = await runFeed("Hide: sexualised, politics, gossip, rage/engagement bait, vagueposts", base, (p) => (p.expect === "show" ? "shown" : "hidden"));
 if (screens) await r1.page.screenshot({ path: join(outDir, "feed-collapse.png"), fullPage: true });
 
 // "Show anyway" reveals the post.
@@ -147,7 +160,7 @@ const bench = await sw.evaluate(async () => {
         type: "offscreen-classify",
         post: { id: `b${img}${i}`, author: "x", text: "", imageUrls: [`https://pbs.twimg.com/media/${img}?bench=${i}`], hasLink: false, hasMedia: true },
         examples: { hide: [], keep: [] },
-        settings: { enabled: true, strictness: "balanced", goals: [], allowAccounts: [], hideStyle: "collapse", onboarded: true, categories: { sexualised: true, clickbait: false, politics: false, gossip: false, offgoal: false } },
+        settings: { enabled: true, strictness: "balanced", goals: [], allowAccounts: [], hideStyle: "collapse", onboarded: true, categories: { sexualised: true } },
       });
       t.push(performance.now() - s);
     }
@@ -161,7 +174,7 @@ await r1.page.close();
 // 2) Off-goal mode with goals.
 const r2 = await runFeed(
   "Off-goal only, goals: Learning to code + Fitness & strength",
-  { ...base, categories: { sexualised: false, clickbait: false, politics: false, gossip: false, offgoal: true }, goals: ["Learning to code", "Fitness & strength"] },
+  { ...base, categories: { ...NONE, offgoal: true }, goals: ["Learning to code", "Fitness & strength"] },
   (p) => (p.goal ? "shown" : "hidden"),
 );
 await r2.page.close();

@@ -2,7 +2,7 @@
 // until it has been checked, then reveals it or replaces it with a small bar.
 import { ext } from "../shared/ext";
 import { getSettings, onSettingsChanged } from "../shared/settings";
-import type { Category, PostData, Settings, Verdict } from "../shared/types";
+import { labelName, type Category, type PostData, type Settings, type Verdict } from "../shared/types";
 import { POST_SELECTOR, extractPost, mediaPending, quickPostId } from "./x-adapter";
 
 const ROOT = document.documentElement;
@@ -67,26 +67,21 @@ async function verdictFor(post: PostData, s: Settings): Promise<Verdict> {
   return v;
 }
 
-const LABELS: Record<string, string> = {
-  sexualised: "Sexualised",
-  clickbait: "Clickbait",
-  politics: "Politics",
-  gossip: "Gossip",
-  offgoal: "Relevance to your goals",
-  image: "Suggestive image",
-};
-
 /** Tooltip text explaining a decision ("Why was this hidden?"). */
 function explain(v: Verdict): string {
-  const lines = Object.entries(v.scores)
+  const name = (k: string) => (k === "image" ? "Suggestive image" : labelName(k as Category));
+  const scores = Object.entries(v.scores)
     .filter(([, n]) => n !== undefined)
     .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-    .map(([k, n]) => `${LABELS[k] ?? k}: ${(n ?? 0).toFixed(2)}`);
+    .map(([k, n]) => `  ${name(k)}: ${(n ?? 0).toFixed(2)}`);
   return [
-    "Why was this hidden?",
-    ...lines,
+    `Labels: ${(v.labels ?? []).map((l) => labelName(l)).join(" · ") || "none"}`,
+    `Hidden because you hide: ${(v.hiddenBy ?? []).map(labelName).join(", ")}`,
     "",
-    "Wrong? Right-click the post → Focus Feed → Don't hide posts like this.",
+    "Scores:",
+    ...scores,
+    "",
+    "Wrong? Right-click the post → Focus Feed.",
   ].join("\n");
 }
 

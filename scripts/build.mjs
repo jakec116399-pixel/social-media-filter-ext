@@ -21,6 +21,12 @@ try {
 
 if (!only) await rm(join(root, "dist"), { recursive: true, force: true });
 
+// Precompute embeddings for the built-in example posts (fast extension startup).
+execFileSync(process.execPath, ["--experimental-strip-types", "--no-warnings", "scripts/embed-prototypes.ts"], {
+  cwd: root,
+  stdio: "inherit",
+});
+
 const GECKO_ID = "focus-feed@social-media-filter-ext";
 
 for (const target of targets) {

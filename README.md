@@ -2,22 +2,23 @@
 
 A Chrome extension that hides unwanted posts from your X (Twitter) feed using AI that runs **on your own device**. Nothing you browse is sent to a server.
 
-It can hide one or more of the following:
+Every post gets labels in three groups, and you choose which labels hide a post:
 
-| Category | What it catches |
+| Group | Labels |
 |---|---|
-| **Sexualised** | Suggestive or explicit images and text |
-| **Clickbait & vagueposts** | Engagement bait, "you won't believe…", cryptic posts with no substance |
-| **Politics** | Elections, parties, politicians, culture-war arguments |
-| **Celebrity & gossip** | Celebrity drama, relationships, influencer beef |
-| **Off-goal** | Anything not related to goals you choose (e.g. "Learning to code", "Fitness") |
+| **Safety** | Sexualised (text and images) |
+| **Topics**: what a post is about | Politics · News & events · Celebrity & gossip · Sports · Film, TV, music & gaming · Memes & humour · Money, crypto & hustle · Tech & science · Learning & education · Health & fitness · Food, travel & lifestyle · Personal updates · Relationships & dating · Ads & promotion |
+| **Tone**: how it's written | Rage bait · Engagement bait · Vagueposting · Doom & negativity |
+| **Goal mode** | Off-goal: hide anything unrelated to goals you choose (e.g. "Learning to code") |
+
+A post can have several labels, such as "Politics · Rage bait", so you can, for example, keep politics but hide rage bait.
 
 Hidden posts collapse to a small bar, or are covered in place, with a **Show anyway** button. Hover over the bar to see why a post was hidden.
 
 ### Teach it
 
 Right-click any post → **Focus Feed** →
-- **Hide posts like this → (category)** for posts it missed.
+- **Hide posts about… → (topic)** or **Hide posts written like this… → (tone)** for posts it missed. This also switches that label on.
 - **Don't hide posts like this** for posts it hid by mistake.
 
 It learns immediately, on your device. Similar posts follow your choice from then on, and your examples sharpen each category. The popup shows how many posts you've taught and can forget them. **Copy feedback report** copies recent decisions and their scores, which is useful for tuning the built-in thresholds.
@@ -71,7 +72,7 @@ X page ──► content script ─── keyword rules (instant) ──► hide
 1. **Find posts.** `src/content/x-adapter.ts` knows X's page structure. When X changes its markup, this is the only file to update.
 2. **Blur while checking.** New posts are blurred until judged, so nothing flashes on screen.
 3. **Keywords** (`src/shared/heuristics.ts`). High-precision rules for obvious cases.
-4. **Text AI** (`src/shared/textModel.ts`, examples in `src/shared/prototypes.ts`). Zero-shot classification. The post is cleaned (links, @mentions and hashtags removed), embedded, and compared with ~20 example posts per category and ~50 neutral posts, averaging the 3 closest matches. Long posts are also scored sentence by sentence. Off-goal compares posts with your goals; preset goals come with example posts. Your right-click examples are added to these sets.
+4. **Text AI** (`src/shared/textModel.ts`; example posts in `src/shared/prototypes.ts`). The post is cleaned (links, @mentions and hashtags removed), embedded, and compared with example posts for every label, averaging the 3 closest matches. **Topics compete**: a post's topic is the one it's closest to, so topics nobody hides still give every post a sensible home instead of forcing it into the nearest hidden category. **Tones** are judged separately, against plainly written posts. Long posts are also scored sentence by sentence. Embeddings of the built-in examples are precomputed at build time (`scripts/embed-prototypes.ts`) for fast startup. Your right-click examples are added to the sets.
 5. **Tier 3, image AI** (`src/offscreen/offscreen.ts`). For posts with images when *Sexualised* is on.
 6. **Cache.** Results are cached per post, text and image URL.
 
@@ -88,12 +89,18 @@ X page ──► content script ─── keyword rules (instant) ──► hide
 
 ### Current accuracy (balanced setting)
 
-| Test set | Unwanted posts caught | Right category | Good posts wrongly hidden |
-|---|---|---|---|
-| `realistic-posts.json`: messy, real-looking posts, not used to write the examples | 28/34 | 27/28 | 2/24 |
-| `labeled-posts.json`: clean examples | 47/50 | 46/47 | 0/34 |
+Measured with `npm run eval` on posts that were **not** used to write the examples:
 
-v0.1 balanced caught 23/34 on the realistic set. Real feeds are harder than both sets, which is why teaching by right-click exists.
+| | `realistic-posts.json` (58 messy posts) | `topic-posts.json` (78 posts, all topics) |
+|---|---|---|
+| Closest topic correct | 84% | 89% |
+| Typical user* — unwanted posts hidden | 31/34 | 17/20 |
+| Typical user* — good posts wrongly hidden | 2/24 | 2/58 |
+| Tones found / false tone labels | 11/15 / 3 | 8/12 / 6 |
+
+\*Hides sexualised, politics, gossip, rage bait, engagement bait and vagueposting.
+
+Tone is harder than topic: rage bait in particular is often missed. Both sets are small and hand-written, so real feeds will be harder. Teaching by right-click is the main way to fix your specific feed.
 
 ## Known limitations
 

@@ -1,6 +1,6 @@
 import { ext } from "../shared/ext";
 import { getSettings, saveSettings } from "../shared/settings";
-import { CATEGORIES, type DayStats, type UserExamples } from "../shared/types";
+import { LABELS, labelName, type Category, type DayStats, type UserExamples } from "../shared/types";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -20,23 +20,28 @@ async function init() {
   $("hidden-count").textContent = String(total);
   $("sub").textContent = `posts hidden today${stats.scanned ? ` · ${stats.scanned} checked by AI` : ""}`;
   $("rows").replaceChildren(
-    ...CATEGORIES.filter((c) => s.categories[c.id] || stats.hidden[c.id]).map((c) => {
-      const li = document.createElement("li");
-      const name = document.createElement("span");
-      name.className = "muted";
-      name.textContent = c.label;
-      const n = document.createElement("span");
-      n.textContent = String(stats.hidden[c.id] ?? 0);
-      li.append(name, n);
-      return li;
-    }),
+    ...([...LABELS.map((l) => l.id), "offgoal"] as Category[])
+      .filter((id) => stats.hidden[id])
+      .sort((a, b) => (stats.hidden[b] ?? 0) - (stats.hidden[a] ?? 0))
+      .map((id) => ({ id, label: labelName(id) }))
+      .map((c) => {
+        const li = document.createElement("li");
+        const name = document.createElement("span");
+        name.className = "muted";
+        name.textContent = c.label;
+        const n = document.createElement("span");
+        n.textContent = String(stats.hidden[c.id] ?? 0);
+        li.append(name, n);
+        return li;
+      }),
   );
   $("settings").addEventListener("click", () => ext.runtime.openOptionsPage());
 
   const { examples } = (await ext.storage.local.get("examples")) as { examples?: UserExamples };
   const n = (examples?.hide.length ?? 0) + (examples?.keep.length ?? 0);
   if (n) {
-    $("taught").textContent = `Learned from ${n} post${n === 1 ? "" : "s"} you taught it (right-click a post → Focus Feed).`;
+    $("taught").textContent =
+      `Learned from ${n} post${n === 1 ? "" : "s"} you taught it (right-click a post → Focus Feed).`;
     $("forget").hidden = false;
   }
   $("report").addEventListener("click", async () => {

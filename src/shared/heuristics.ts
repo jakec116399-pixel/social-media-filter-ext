@@ -1,8 +1,8 @@
-// Tier 1: instant keyword / pattern checks. These run in the content script
-// before any AI model, and catch the obvious cases with high precision.
-import type { Category, PostData } from "./types";
+// Keyword / pattern checks that catch obvious cases with high precision.
+// They add labels on top of what the AI model finds.
+import type { LabelId, PostData } from "./types.ts";
 
-type Rule = { category: Category; re: RegExp; reason: string };
+type Rule = { category: LabelId; re: RegExp; reason: string };
 
 const w = (words: string[]) => new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${words.join("|")})(?=$|[^\\p{L}\\p{N}])`, "iu");
 
@@ -127,7 +127,7 @@ const RULES: Rule[] = [
     ]),
   },
   {
-    category: "clickbait",
+    category: "engagementbait",
     reason: "Engagement bait",
     re: w([
       "you won['’]?t believe",
@@ -151,6 +151,8 @@ const RULES: Rule[] = [
       "drop a .{1,3} if",
       "(?:most|99%) (?:people|of you) (?:won['’]?t|can['’]?t|don['’]?t)",
       "only geniuses",
+      "only \\d+% (?:of (?:people|you) )?(?:can|will|get|know)",
+      "can you (?:find|spot|solve|see) (?:it|the|this)",
       "unpopular opinion",
       "we need to talk",
       "some of you",
@@ -168,7 +170,7 @@ const RULES: Rule[] = [
 ];
 
 export interface HeuristicHit {
-  category: Category;
+  category: LabelId;
   reason: string;
 }
 
@@ -183,8 +185,8 @@ export function heuristicHits(post: Pick<PostData, "text" | "hasLink" | "hasMedi
   }
 
   // Vagueposts: very short, no link or media, and no concrete information.
-  if (!hits.some((h) => h.category === "clickbait") && isVaguepost(post)) {
-    hits.push({ category: "clickbait", reason: "Vaguepost" });
+  if (isVaguepost(post)) {
+    hits.push({ category: "vaguepost", reason: "Vaguepost" });
   }
   return hits;
 }

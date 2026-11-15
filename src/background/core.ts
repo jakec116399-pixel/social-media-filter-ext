@@ -1,9 +1,9 @@
 // Shared background logic for Chrome and Firefox: routes classification
 // requests to the AI engine, keeps daily stats and opens onboarding.
 import { ext } from "../shared/ext";
-import { getSettings, today } from "../shared/settings";
+import { getSettings, saveSettings, today } from "../shared/settings";
 import {
-  CATEGORIES,
+  LABELS,
   EMPTY_EXAMPLES,
   MAX_EXAMPLES,
   type DayStats,
@@ -11,7 +11,7 @@ import {
   type Msg,
   type PostData,
   type Settings,
-  type TopicCategory,
+  type LabelId,
   type UserExamples,
   type Verdict,
 } from "../shared/types";
@@ -45,7 +45,10 @@ function updateStats(fn: (s: DayStats) => void): Promise<void> {
 // ---- What the user taught via right-click (stored locally) ----
 async function getExamples(): Promise<UserExamples> {
   const { examples } = (await ext.storage.local.get("examples")) as { examples?: UserExamples };
-  return { ...EMPTY_EXAMPLES, ...examples };
+  const e = { ...EMPTY_EXAMPLES, ...examples };
+  // v0.2 had a single "clickbait" category; it is now "engagement bait".
+  e.hide = e.hide.map((h) => ((h.category as string) === "clickbait" ? { ...h, category: "engagementbait" } : h));
+  return e;
 }
 let examplesQueue: Promise<unknown> = Promise.resolve();
 function updateExamples(fn: (e: UserExamples) => void): Promise<void> {
@@ -97,22 +100,27 @@ async function createMenus() {
   await ext.contextMenus.removeAll();
   {
     ext.contextMenus.create({ id: MENU_ROOT, title: "Focus Feed", contexts: ["all"], documentUrlPatterns: patterns });
-    ext.contextMenus.create({
-      id: "hide",
-      parentId: MENU_ROOT,
-      title: "Hide posts like this",
-      contexts: ["all"],
-      documentUrlPatterns: patterns,
-    });
-    for (const c of CATEGORIES) {
-      if (c.id === "offgoal") continue;
+    const groups: [string, string, LabelId[]][] = [
+      ["hide-topic", "Hide posts about…", LABELS.filter((l) => l.group !== "tone").map((l) => l.id)],
+      ["hide-tone", "Hide posts written like this…", LABELS.filter((l) => l.group === "tone").map((l) => l.id)],
+    ];
+    for (const [groupId, title, ids] of groups) {
       ext.contextMenus.create({
-        id: `hide:${c.id}`,
-        parentId: "hide",
-        title: c.label,
+        id: groupId,
+        parentId: MENU_ROOT,
+        title,
         contexts: ["all"],
         documentUrlPatterns: patterns,
       });
+      for (const id of ids) {
+        ext.contextMenus.create({
+          id: `hide:${id}`,
+          parentId: groupId,
+          title: LABELS.find((l) => l.id === id)!.label,
+          contexts: ["all"],
+          documentUrlPatterns: patterns,
+        });
+      }
     }
     ext.contextMenus.create({
       id: "keep",
@@ -141,11 +149,18 @@ async function onMenuClick(info: chrome.contextMenus.OnClickData, tab?: chrome.t
     // Also mark it as a mistake in the log.
     (await getLog()).filter((d) => d.id === post.id).forEach((d) => (d.overridden = true));
   } else {
-    const category = id.slice(5) as TopicCategory;
+    const category = id.slice(5) as LabelId;
     await updateExamples((e) => {
+      e.hide = e.hide.filter((h) => h.text !== text);
       e.hide.push({ category, text });
       e.keep = e.keep.filter((k) => k !== text);
     });
+    // Teaching "hide posts about X" means the user wants X hidden: switch it on.
+    const settings = await getSettings();
+    if (!settings.categories[category]) {
+      settings.categories[category] = true;
+      await saveSettings(settings);
+    }
   }
   await broadcastRescan();
 }

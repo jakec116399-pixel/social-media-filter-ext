@@ -1,7 +1,7 @@
 import { ext } from "../shared/ext";
 import { getSettings, saveSettings } from "../shared/settings";
 import { GOAL_PRESETS } from "../shared/textModel";
-import { CATEGORIES, type Settings, type Strictness } from "../shared/types";
+import { LABELS, type Category, type LabelGroup, type Settings, type Strictness } from "../shared/types";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const onboarding = new URLSearchParams(location.search).has("onboarding");
@@ -15,26 +15,35 @@ const STRICT_HINTS: Record<Strictness, string> = {
 
 let s: Settings;
 
+function checkbox(id: Category, title: string, description: string): HTMLLabelElement {
+  const label = document.createElement("label");
+  label.className = "cat";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = s.categories[id];
+  input.addEventListener("change", () => {
+    s.categories[id] = input.checked;
+    renderGoals();
+  });
+  const text = document.createElement("div");
+  const strong = document.createElement("strong");
+  strong.textContent = title;
+  const span = document.createElement("span");
+  span.className = "muted";
+  span.textContent = description;
+  text.append(strong, span);
+  label.append(input, text);
+  return label;
+}
+
 function renderCategories() {
-  const box = $("cats");
-  box.replaceChildren(
-    ...CATEGORIES.map((c) => {
-      const label = document.createElement("label");
-      label.className = "cat";
-      const input = document.createElement("input");
-      input.type = "checkbox";
-      input.checked = s.categories[c.id];
-      input.addEventListener("change", () => {
-        s.categories[c.id] = input.checked;
-        renderGoals();
-      });
-      const text = document.createElement("div");
-      text.innerHTML = `<strong></strong><span class="muted"></span>`;
-      text.querySelector("strong")!.textContent = c.label;
-      text.querySelector("span")!.textContent = c.description;
-      label.append(input, text);
-      return label;
-    }),
+  const of = (group: LabelGroup) =>
+    LABELS.filter((l) => l.group === group).map((l) => checkbox(l.id, l.label, l.description));
+  $("safety").replaceChildren(...of("safety"));
+  $("topics").replaceChildren(...of("topic"));
+  $("tones").replaceChildren(...of("tone"));
+  $("goalmode").replaceChildren(
+    checkbox("offgoal", "Off-goal", "Hide anything not related to the goals you set below, whatever its topic"),
   );
 }
 

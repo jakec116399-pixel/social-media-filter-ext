@@ -6,8 +6,23 @@ import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 import type { NSFWJS } from "nsfwjs/core";
 import { ext } from "../shared/ext";
 import { heuristicHits } from "../shared/heuristics";
-import { TextClassifier, decideText, type TextScores } from "../shared/textModel";
-import type { Category, PostData, Settings, Strictness, TopicCategory, UserExamples, Verdict } from "../shared/types";
+import {
+  TextClassifier,
+  decideText,
+  decodePrecomputed,
+  type PrecomputedFile,
+  type TextScores,
+} from "../shared/textModel";
+import {
+  labelName,
+  type Category,
+  type LabelId,
+  type PostData,
+  type Settings,
+  type Strictness,
+  type UserExamples,
+  type Verdict,
+} from "../shared/types";
 
 // ---- Text model ----
 let textClf: Promise<TextClassifier> | null = null;
@@ -30,12 +45,17 @@ function getTextClassifier(): Promise<TextClassifier> {
         dtype: "q8",
         device: "wasm",
       })) as FeatureExtractionPipeline;
+      // Example-post embeddings computed at build time; anything missing is computed here.
+      const precomputed = await fetch(ext.runtime.getURL("prototype-vectors.json"))
+        .then((r) => (r.ok ? r.json() : null))
+        .then((f: PrecomputedFile | null) => (f ? decodePrecomputed(f) : undefined))
+        .catch(() => undefined);
       const clf = new TextClassifier(async (texts) => {
         const out = await extractor(texts, { pooling: "mean", normalize: true });
         const dim = out.dims[1];
         const flat = out.data as Float32Array;
         return texts.map((_, i) => flat.slice(i * dim, (i + 1) * dim));
-      });
+      }, precomputed);
       await clf.init();
       return clf;
     } catch (e) {
@@ -140,52 +160,50 @@ export async function classify(post: PostData, settings: Settings, examples: Use
       p.catch(() => textCache.delete(key)); // don't cache failures
     }
     text = await p;
-    for (const [k, v] of Object.entries(text.margin)) scores[k as Category] = round(v);
-    if (text.goalRelevance !== undefined) scores.offgoal = round(text.goalRelevance);
   }
-
   const img = await imagesP;
   const ms = Math.round(performance.now() - t0);
-  if (text?.taught?.action === "keep") return { hide: false, reason: "You taught: keep posts like this", scores, ms };
 
-  if (img !== undefined) scores.image = round(img);
-  if (img !== undefined && img >= IMAGE_THRESHOLD[settings.strictness]) {
-    return { hide: true, category: "sexualised", reason: "Suggestive image", scores, ms };
-  }
-  if (text?.taught?.action === "hide" && c[text.taught.category]) {
-    return {
-      hide: true,
-      category: text.taught.category,
-      reason: `${REASONS[text.taught.category]} (you taught this)`,
-      scores,
-      ms,
-    };
-  }
-
-  // Keyword rules: instant, high-precision. If the AI is clearly more confident
-  // about a different enabled category, use that category instead.
-  const hit = heuristicHits(post).find((h) => c[h.category]);
-  const ai = text
-    ? decideText(text, { ...c, offgoal: c.offgoal && words >= 3 && goals.length > 0 }, settings.strictness)
-    : undefined;
-  if (hit) {
-    const kwMargin = text?.margin[hit.category as TopicCategory] ?? 0;
-    if (ai && ai.category !== "offgoal" && ai.category !== hit.category && ai.score > kwMargin + 0.05) {
-      return { hide: true, category: ai.category, reason: REASONS[ai.category], scores, ms };
+  // Labels from the AI (topics + tones), keyword rules, and the image model.
+  const enabled = { ...c, offgoal: c.offgoal && words >= 3 && goals.length > 0 };
+  const decision = text ? decideText(text, enabled, settings.strictness) : { labels: [], hiddenBy: [] };
+  const labels: LabelId[] = [...decision.labels];
+  const keep = text?.taught?.action === "keep";
+  if (!keep) {
+    for (const h of heuristicHits(post)) if (!labels.includes(h.category)) labels.push(h.category);
+    if (img !== undefined && img >= IMAGE_THRESHOLD[settings.strictness]) {
+      // Suggestive image: sexualised becomes the leading label.
+      if (labels.includes("sexualised")) labels.splice(labels.indexOf("sexualised"), 1);
+      labels.unshift("sexualised");
     }
-    return { hide: true, category: hit.category, reason: `${REASONS[hit.category]} (keywords)`, scores, ms };
   }
-  if (ai) return { hide: true, category: ai.category, reason: REASONS[ai.category], scores, ms };
-  return { hide: false, scores, ms };
-}
+  const hiddenBy: Category[] = keep ? [] : labels.filter((l) => c[l]);
+  if (!keep && !hiddenBy.length && decision.hiddenBy.includes("offgoal")) hiddenBy.push("offgoal");
 
-const REASONS: Record<Category, string> = {
-  sexualised: "Suggestive",
-  clickbait: "Clickbait / vaguepost",
-  politics: "Politics",
-  gossip: "Celebrity / gossip",
-  offgoal: "Not related to your goals",
-};
+  if (text) {
+    // Scores for the "why?" tooltip: top topics and any notable tones.
+    const topics = Object.entries(text.topic)
+      .sort((x, y) => y[1].sim - x[1].sim)
+      .slice(0, 3);
+    for (const [k, v] of topics) scores[k as Category] = round(v.sim);
+    for (const [k, v] of Object.entries(text.tone)) if (v > 0) scores[k as Category] = round(v);
+    if (text.goalRelevance !== undefined) scores.offgoal = round(text.goalRelevance);
+  }
+  if (img !== undefined) scores.image = round(img);
+
+  const suggestiveImage = img !== undefined && img >= IMAGE_THRESHOLD[settings.strictness];
+  const name = (h: Category) => (h === "sexualised" && suggestiveImage ? "Suggestive image" : labelName(h));
+  const reason = hiddenBy.map(name).join(" · ") + (text?.taught?.action === "hide" ? " (you taught this)" : "");
+  return {
+    hide: hiddenBy.length > 0,
+    labels,
+    hiddenBy,
+    category: hiddenBy[0],
+    reason: keep ? "You taught: keep posts like this" : hiddenBy.length ? reason : undefined,
+    scores,
+    ms,
+  };
+}
 
 const round = (x: number) => Math.round(x * 100) / 100;
 

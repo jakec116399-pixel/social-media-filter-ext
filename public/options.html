@@ -11,7 +11,12 @@
       .welcome { display: none; }
       body.onboarding .welcome { display: block; }
       body.onboarding .title-settings { display: none; }
-      .cats { display: grid; gap: 8px; margin-top: 14px; }
+      .cats { display: grid; gap: 8px; }
+      h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 22px 0 10px; }
+      h3 .small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+      .topic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+      .topic-grid .cat { padding: 10px 12px; }
+      .topic-grid .cat .muted { font-size: 12.5px; }
       .cat {
         display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px;
         border: 1px solid var(--border); border-radius: 12px; cursor: pointer;
@@ -70,8 +75,19 @@
 
       <section class="card">
         <h2>1. What should be hidden?</h2>
-        <p class="muted">Pick one or more.</p>
-        <div class="cats" id="cats"></div>
+        <p class="muted">Pick anything you don't want in your feed. A post is hidden if any of its labels is ticked.</p>
+
+        <h3>Safety</h3>
+        <div class="cats" id="safety"></div>
+
+        <h3>Topics <span class="muted small">what a post is about</span></h3>
+        <div class="topic-grid" id="topics"></div>
+
+        <h3>Tone <span class="muted small">how a post is written, whatever the topic</span></h3>
+        <div class="cats" id="tones"></div>
+
+        <h3>Goal mode</h3>
+        <div class="cats" id="goalmode"></div>
       </section>
 
       <section class="card" id="goals-section">
@@ -100,7 +116,7 @@
         <h2>4. How should hidden posts look?</h2>
         <div class="seg" role="radiogroup" aria-label="Hide style">
           <label><input type="radio" name="hideStyle" value="collapse" />Collapse to a small bar</label>
-          <label><input type="radio" name="hideStyle" value="blur" />Blur in place</label>
+          <label><input type="radio" name="hideStyle" value="blur" />Cover in place</label>
         </div>
         <p class="hint muted">Either way you can tap “Show anyway”.</p>
       </section>

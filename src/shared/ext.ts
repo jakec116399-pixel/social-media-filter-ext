@@ -1,4 +1,4 @@
 // Firefox exposes the WebExtension APIs as `browser` (promise-based); Chrome as `chrome`.
-// Both have the same shape for everything this extension uses.
-declare const browser: typeof chrome | undefined;
-export const ext: typeof chrome = typeof browser !== "undefined" ? browser : chrome;
+// Both have the same shape for everything this extension uses. (Undefined in Node tests.)
+const g = globalThis as unknown as { browser?: typeof chrome; chrome?: typeof chrome };
+export const ext: typeof chrome = (g.browser ?? g.chrome)!;

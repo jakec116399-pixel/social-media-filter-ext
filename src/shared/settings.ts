@@ -1,11 +1,17 @@
-import { ext } from "./ext";
-import { DEFAULT_SETTINGS, type Settings } from "./types";
+import { ext } from "./ext.ts";
+import { DEFAULT_SETTINGS, type Settings } from "./types.ts";
 
 export function normalizeSettings(raw: Partial<Settings> | undefined): Settings {
+  const cats = { ...raw?.categories } as Record<string, boolean>;
+  // v0.2 had a single "clickbait" category; it is now three tones.
+  if ("clickbait" in cats) {
+    for (const t of ["ragebait", "engagementbait", "vaguepost"]) cats[t] ??= cats.clickbait;
+    delete cats.clickbait;
+  }
   return {
     ...DEFAULT_SETTINGS,
     ...raw,
-    categories: { ...DEFAULT_SETTINGS.categories, ...raw?.categories },
+    categories: { ...DEFAULT_SETTINGS.categories, ...cats },
     goals: raw?.goals ?? [],
     allowAccounts: raw?.allowAccounts ?? [],
   };
