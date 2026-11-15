@@ -2,7 +2,8 @@
 // with each other (every post gets its closest topic). Tones describe how it's
 // written and are judged independently. A post can have several labels.
 export type TopicId =
-  | "sexualised"
+  | "explicit"
+  | "suggestive"
   | "politics"
   | "news"
   | "gossip"
@@ -31,7 +32,18 @@ export interface LabelDef {
 }
 
 export const LABELS: LabelDef[] = [
-  { id: "sexualised", group: "safety", label: "Sexualised", description: "Suggestive or explicit images and text" },
+  {
+    id: "explicit",
+    group: "safety",
+    label: "Explicit / NSFW",
+    description: "Nudity, porn, explicit sexual text, and posts selling or linking to it",
+  },
+  {
+    id: "suggestive",
+    group: "safety",
+    label: "Suggestive",
+    description: "Sexual but not explicit: bikini & thirst-trap pics, suggestive captions, sexualised dancing",
+  },
   { id: "politics", group: "topic", label: "Politics", description: "Elections, parties, politicians, policy fights" },
   { id: "news", group: "topic", label: "News & events", description: "Breaking news, disasters, crime, world events" },
   {
@@ -133,7 +145,8 @@ export const DEFAULT_SETTINGS: Settings = {
   onboarded: false,
   categories: {
     ...(Object.fromEntries(LABELS.map((l) => [l.id, false])) as Record<LabelId, boolean>),
-    sexualised: true,
+    explicit: true,
+    suggestive: true,
     ragebait: true,
     engagementbait: true,
     vaguepost: true,

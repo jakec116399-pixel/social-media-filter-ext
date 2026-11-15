@@ -6,9 +6,9 @@ test("explicit images hide at moderate confidence", () => {
   assert.equal(judgeImage({ explicit: 0.7, sexy: 0.2, video: false }, "balanced", "unclear"), "explicit");
 });
 
-test("'Sexy' alone needs very high confidence", () => {
-  assert.equal(judgeImage({ explicit: 0.05, sexy: 0.75, video: false }, "balanced", "unclear"), undefined);
-  assert.equal(judgeImage({ explicit: 0.05, sexy: 0.93, video: false }, "balanced", "unclear"), "suggestive");
+test("'Sexy' (bikinis, revealing clothes) needs high confidence", () => {
+  assert.equal(judgeImage({ explicit: 0.05, sexy: 0.7, video: false }, "balanced", "unclear"), undefined);
+  assert.equal(judgeImage({ explicit: 0.05, sexy: 0.85, video: false }, "balanced", "unclear"), "suggestive");
 });
 
 test("a dark video thumbnail of a face, on a post clearly about something else, is not hidden", () => {
@@ -18,7 +18,7 @@ test("a dark video thumbnail of a face, on a post clearly about something else, 
 });
 
 test("sexual text lowers the bar for the image", () => {
-  assert.equal(judgeImage({ explicit: 0.1, sexy: 0.82, video: false }, "balanced", "sexual"), "suggestive");
+  assert.equal(judgeImage({ explicit: 0.1, sexy: 0.72, video: false }, "balanced", "sexual"), "suggestive");
 });
 
 test("video thumbnails are recognised", () => {

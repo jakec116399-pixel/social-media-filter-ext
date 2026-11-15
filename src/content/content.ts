@@ -249,7 +249,7 @@ async function processArticle(article: HTMLElement) {
   if (article.dataset.smfId === post.id && article.dataset.smf === "pending") return; // already in flight
 
   // Wait briefly for images so the image model sees them.
-  if (s.categories.sexualised && mediaPending(article)) {
+  if ((s.categories.explicit || s.categories.suggestive) && mediaPending(article)) {
     setTimeout(() => scheduleScan(), 300);
     if (!article.dataset.smfWaits || Number(article.dataset.smfWaits) < 5) {
       article.dataset.smfWaits = String(Number(article.dataset.smfWaits ?? 0) + 1);

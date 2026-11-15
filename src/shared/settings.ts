@@ -4,6 +4,11 @@ import { DEFAULT_SETTINGS, type Settings } from "./types.ts";
 export function normalizeSettings(raw: Partial<Settings> | undefined): Settings {
   const cats = { ...raw?.categories } as Record<string, boolean>;
   // v0.2 had a single "clickbait" category; it is now three tones.
+  // v0.4 had one "sexualised" label; it is now "explicit" + "suggestive".
+  if ("sexualised" in cats) {
+    for (const t of ["explicit", "suggestive"]) cats[t] ??= cats.sexualised;
+    delete cats.sexualised;
+  }
   if ("clickbait" in cats) {
     for (const t of ["ragebait", "engagementbait", "vaguepost"]) cats[t] ??= cats.clickbait;
     delete cats.clickbait;

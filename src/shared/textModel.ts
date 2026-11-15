@@ -30,7 +30,7 @@ export interface Thresholds {
   topicLead: number;
   /** ...and its similarity is at least this. */
   topicFloor: number;
-  /** Sexualised is stricter, because false alarms on it are upsetting. */
+  /** Explicit / suggestive need a clearer lead, because false alarms on them are upsetting. */
   sexualLead: number;
   sexualFloor: number;
   /** Tone counts if it beats plainly written posts by this margin. */
@@ -232,6 +232,8 @@ export function goalPhrasings(goal: string): string[] {
   return [g, `A post about ${g}`, `Tips, news and discussion about ${g}`];
 }
 
+const SEXUAL = new Set<TopicId>(["explicit", "suggestive"]);
+
 export interface TextScores {
   /** Per topic: similarity, and lead over the best other topic (≥ 0 means it is the top topic). */
   topic: Record<TopicId, { sim: number; lead: number }>;
@@ -340,18 +342,27 @@ export class TextClassifier {
 
     const topic = Object.fromEntries(TOPIC_IDS.map((t) => [t, { sim: -1, lead: -1 }])) as TextScores["topic"];
     const tone = Object.fromEntries(TONE_IDS.map((t) => [t, -1])) as TextScores["tone"];
-    for (const v of vecs) {
+    vecs.forEach((v, segIndex) => {
       const sims = TOPIC_IDS.map((t) => topKSim(v, sets.topic[t]));
       for (let i = 0; i < TOPIC_IDS.length; i++) {
+        // Sexual labels are judged on the whole post only: short fragments like
+        // "full details at the link" or "anyone get photos?" look like adult promos.
+        if (segIndex > 0 && SEXUAL.has(TOPIC_IDS[i])) continue;
+        // Explicit and suggestive are siblings: each is compared with the best
+        // non-sexual topic, not with each other (decideText keeps the stronger).
+        const sexual = SEXUAL.has(TOPIC_IDS[i]);
         let bestOther = -1;
-        for (let j = 0; j < sims.length; j++) if (j !== i && sims[j] > bestOther) bestOther = sims[j];
+        for (let j = 0; j < sims.length; j++) {
+          if (j === i || (sexual && SEXUAL.has(TOPIC_IDS[j]))) continue;
+          if (sims[j] > bestOther) bestOther = sims[j];
+        }
         const lead = sims[i] - bestOther;
         const cur = topic[TOPIC_IDS[i]];
         if (lead > cur.lead) topic[TOPIC_IDS[i]] = { sim: sims[i], lead };
       }
       const plain = topKSim(v, sets.plain);
       for (const t of TONE_IDS) tone[t] = Math.max(tone[t], topKSim(v, sets.tone[t]) - plain);
-    }
+    });
 
     // A post very similar to one the user explicitly taught follows that choice.
     let taught: TextScores["taught"];
@@ -395,9 +406,14 @@ export function decideText(s: TextScores, enabled: Record<Category, boolean>, st
   const found: { id: LabelId; strength: number }[] = [];
   for (const id of TOPIC_IDS) {
     const { sim, lead } = s.topic[id];
-    const [needLead, needFloor] = id === "sexualised" ? [t.sexualLead, t.sexualFloor] : [t.topicLead, t.topicFloor];
+    const sexual = SEXUAL.has(id);
+    const [needLead, needFloor] = sexual ? [t.sexualLead, t.sexualFloor] : [t.topicLead, t.topicFloor];
     if (lead >= needLead && sim >= needFloor) found.push({ id, strength: lead + 0.1 });
   }
+  // Only the stronger of explicit / suggestive is kept.
+  const ex = found.find((f) => f.id === "explicit");
+  const su = found.find((f) => f.id === "suggestive");
+  if (ex && su) found.splice(found.indexOf(s.topic.explicit.sim >= s.topic.suggestive.sim ? su : ex), 1);
   for (const id of TONE_IDS) {
     if (s.tone[id] >= t.tone[id]) found.push({ id, strength: s.tone[id] - t.tone[id] });
   }

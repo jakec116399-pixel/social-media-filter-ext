@@ -36,11 +36,12 @@ const none = Object.fromEntries([...TOPIC_IDS, ...TONE_IDS, "offgoal"].map((k) =
 function labelsFor(p: Post, s: TextScores, st: Strictness): Set<LabelId> {
   const out = new Set(decideText(s, none, st).labels);
   for (const h of heuristicHits({ text: p.text, hasLink: /https?:|\.com/.test(p.text), hasMedia: false })) out.add(h.category);
+  if (out.has("explicit")) out.delete("suggestive"); // as in the extension
   return out;
 }
 
-// A typical user: hides sexualised, politics, gossip and the three bait/vague tones.
-const HIDE = new Set<LabelId>(["sexualised", "politics", "gossip", "ragebait", "engagementbait", "vaguepost"]);
+// A typical user: hides explicit, suggestive, politics, gossip and the three bait/vague tones.
+const HIDE = new Set<LabelId>(["explicit", "suggestive", "politics", "gossip", "ragebait", "engagementbait", "vaguepost"]);
 const shouldHide = (p: Post) => HIDE.has(p.topic as LabelId) || p.tones.some((t) => HIDE.has(t));
 
 const showMistakes = process.argv.includes("--mistakes");
@@ -53,6 +54,13 @@ for (const set of sets) {
   const top1 = withTopic.filter((x) => topTopic(x.s) === x.p.topic).length;
   console.log(`\n### ${set.name} (${set.posts.length} posts)`);
   console.log(`  closest topic correct: ${pct(top1, withTopic.length)}`);
+  // Explicit vs suggestive specifically.
+  const sex = scored.filter((x) => x.p.topic === "explicit" || x.p.topic === "suggestive");
+  if (sex.length) {
+    const exact = sex.filter((x) => labelsFor(x.p, x.s, "balanced").has(x.p.topic as LabelId)).length;
+    const either = sex.filter((x) => { const L = labelsFor(x.p, x.s, "balanced"); return L.has("explicit") || L.has("suggestive"); }).length;
+    console.log(`  sexual posts (balanced): caught as either ${pct(either, sex.length)}, exact label ${pct(exact, sex.length)}`);
+  }
   if (showMistakes) {
     for (const x of withTopic) if (topTopic(x.s) !== x.p.topic) console.log(`     topic ${x.p.topic} → ${topTopic(x.s)}: ${x.p.text.slice(0, 80)}`);
   }

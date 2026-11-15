@@ -1,6 +1,6 @@
 // The AI engine. Runs in Chrome's offscreen document, or Firefox's background page.
 //  - Text: all-MiniLM-L6-v2 sentence embeddings (ONNX, ~23 MB) for zero-shot topic scoring
-//  - Images: NSFWJS MobileNetV2 (~3 MB) for sexualised-image detection
+//  - Images: NSFWJS MobileNetV2 (~3 MB) for explicit / suggestive images
 // The AI libraries are imported lazily so each lands in its own smaller file.
 import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 import type { NSFWJS } from "nsfwjs/core";
@@ -133,9 +133,9 @@ export async function classify(post: PostData, settings: Settings, examples: Use
   const c = settings.categories;
   const goals = settings.goals.filter((g) => g.trim());
 
-  // Images (sexualised only) — run in parallel with the text model.
+  // Images (only if explicit or suggestive is hidden): run in parallel with the text model.
   const imagesP =
-    c.sexualised && post.imageUrls.length
+    (c.explicit || c.suggestive) && post.imageUrls.length
       ? Promise.all(
           post.imageUrls.slice(0, 4).map((u) => {
             let p = imageCache.get(u);
@@ -175,20 +175,24 @@ export async function classify(post: PostData, settings: Settings, examples: Use
 
   // Image verdict, using the text as context (see src/shared/imagePolicy.ts).
   let context: TextContext = "unclear";
-  if (labels.includes("sexualised")) context = "sexual";
+  if (labels.includes("explicit") || labels.includes("suggestive")) context = "sexual";
   else if (text) {
     const top = topTopic(text);
-    if (top !== "sexualised" && text.topic[top].lead >= 0.04 && text.topic[top].sim >= 0.3) context = "other-topic";
+    if (top !== "explicit" && top !== "suggestive" && text.topic[top].lead >= 0.04 && text.topic[top].sim >= 0.3) context = "other-topic";
   }
   const imageHits = images.map((i) => judgeImage(i, settings.strictness, context));
   const imageKind = imageHits.includes("explicit") ? "explicit" : imageHits.includes("suggestive") ? "suggestive" : undefined;
   if (!keep) {
     if (imageKind) {
-      // Suggestive image: sexualised becomes the leading label.
-      if (labels.includes("sexualised")) labels.splice(labels.indexOf("sexualised"), 1);
-      labels.unshift("sexualised");
+      // The image decides between explicit and suggestive; it leads the labels.
+      // (Explicit text with a merely suggestive image stays explicit.)
+      const explicitText = labels.includes("explicit");
+      for (const l of ["explicit", "suggestive"] as const) if (labels.includes(l)) labels.splice(labels.indexOf(l), 1);
+      labels.unshift(imageKind === "suggestive" && explicitText ? "explicit" : imageKind);
     }
   }
+  // A post is either explicit or suggestive, never both: explicit evidence wins.
+  if (labels.includes("explicit") && labels.includes("suggestive")) labels.splice(labels.indexOf("suggestive"), 1);
   const hiddenBy: Category[] = keep ? [] : labels.filter((l) => c[l]);
   if (!keep && !hiddenBy.length && decision.hiddenBy.includes("offgoal")) hiddenBy.push("offgoal");
 
@@ -207,7 +211,7 @@ export async function classify(post: PostData, settings: Settings, examples: Use
   }
 
   const imageName = imageKind === "explicit" ? "Explicit image" : "Suggestive image";
-  const name = (h: Category) => (h === "sexualised" && imageKind ? imageName : labelName(h));
+  const name = (h: Category) => ((h === "explicit" || h === "suggestive") && imageKind ? imageName : labelName(h));
   const reason = hiddenBy.map(name).join(" · ") + (text?.taught?.action === "hide" ? " (you taught this)" : "");
   return {
     hide: hiddenBy.length > 0,

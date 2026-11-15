@@ -46,7 +46,7 @@ for (const strictness of ["balanced", "strict"]) {
       chrome.storage.sync.set({
         settings: {
           enabled: true, onboarded: true, strictness: st, hideStyle: "collapse", allowAccounts: [], goals: [],
-          categories: { sexualised: true, clickbait: true, politics: true, gossip: true, offgoal: false },
+          categories: { explicit: true, suggestive: true, ragebait: true, engagementbait: true, vaguepost: true, politics: true, gossip: true, offgoal: false },
         },
       }),
     strictness,

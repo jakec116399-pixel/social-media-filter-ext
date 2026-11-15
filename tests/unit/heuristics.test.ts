@@ -9,7 +9,10 @@ const post = (text: string, extra = {}) => ({ text, hasLink: false, hasMedia: fa
 const cats = (text: string) => heuristicHits(post(text)).map((h) => h.category);
 
 test("keyword rules catch obvious cases", () => {
-  assert.deepEqual(cats("New OnlyFans drop tonight"), ["sexualised"]);
+  assert.deepEqual(cats("New OnlyFans drop tonight"), ["explicit"]);
+  assert.deepEqual(cats("smash or pass?"), ["suggestive"]);
+  assert.deepEqual(cats("new pics 😈🍑"), ["suggestive"]);
+  assert.deepEqual(cats("full set for my subscribers 😈"), ["explicit"]);
   assert.deepEqual(cats("The Senate vote on the election bill"), ["politics"]);
   assert.deepEqual(cats("Kanye just did it again"), ["gossip"]);
   assert.deepEqual(cats("You won't believe what happened next"), ["engagementbait"]);
@@ -61,11 +64,36 @@ test("a topic that isn't the closest doesn't count", () => {
   assert.equal(decideText(s, { ...off, gossip: true }, "balanced").hiddenBy.length, 0);
 });
 
-test("sexualised needs a clear lead over other topics", () => {
-  const close = scores({ sexualised: 0.42, lifestyle: 0.41 });
-  assert.equal(decideText(close, { ...off, sexualised: true }, "balanced").hiddenBy.length, 0);
-  const clear = scores({ sexualised: 0.55, lifestyle: 0.4 });
-  assert.deepEqual(decideText(clear, { ...off, sexualised: true }, "balanced").hiddenBy, ["sexualised"]);
+test("suggestive needs a clear lead over other topics", () => {
+  const close = scores({ suggestive: 0.42, lifestyle: 0.41 });
+  assert.equal(decideText(close, { ...off, suggestive: true }, "balanced").hiddenBy.length, 0);
+  const clear = scores({ suggestive: 0.55, lifestyle: 0.4 });
+  assert.deepEqual(decideText(clear, { ...off, suggestive: true }, "balanced").hiddenBy, ["suggestive"]);
+});
+
+test("explicit and suggestive don't cancel each other out; the stronger is the label", () => {
+  // Leads are measured against non-sexual topics, so a clearly sexual post is caught
+  // even when explicit and suggestive score almost the same.
+  const sims = { explicit: 0.56, suggestive: 0.55, lifestyle: 0.35 };
+  const sexual = new Set(["explicit", "suggestive"]);
+  const topic = Object.fromEntries(
+    TOPIC_IDS.map((t) => {
+      const sim = (sims as Record<string, number>)[t] ?? 0.1;
+      const others = TOPIC_IDS.filter((o) => o !== t && !(sexual.has(t) && sexual.has(o))).map((o) => (sims as Record<string, number>)[o] ?? 0.1);
+      return [t, { sim, lead: sim - Math.max(...others) }];
+    }),
+  ) as TextScores["topic"];
+  const s: TextScores = { topic, tone: Object.fromEntries(TONE_IDS.map((t) => [t, -0.1])) as TextScores["tone"] };
+  const d = decideText(s, { ...off, explicit: true, suggestive: true }, "balanced");
+  assert.deepEqual(d.labels, ["explicit"]);
+  assert.deepEqual(decideText(s, { ...off, suggestive: true }, "balanced").hiddenBy, [], "blocking only suggestive lets explicit through");
+});
+
+test("old 'sexualised' setting migrates to both explicit and suggestive", () => {
+  const s = normalizeSettings({ categories: { sexualised: false } as never });
+  assert.equal(s.categories.explicit, false);
+  assert.equal(s.categories.suggestive, false);
+  assert.equal("sexualised" in s.categories, false);
 });
 
 test("off-goal applies only when no other label hides the post", () => {

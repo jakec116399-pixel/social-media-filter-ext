@@ -48,7 +48,8 @@ async function getExamples(): Promise<UserExamples> {
   const { examples } = (await ext.storage.local.get("examples")) as { examples?: UserExamples };
   const e = { ...EMPTY_EXAMPLES, ...examples };
   // v0.2 had a single "clickbait" category; it is now "engagement bait".
-  e.hide = e.hide.map((h) => ((h.category as string) === "clickbait" ? { ...h, category: "engagementbait" } : h));
+  const renamed: Record<string, LabelId> = { clickbait: "engagementbait", sexualised: "suggestive" };
+  e.hide = e.hide.map((h) => (renamed[h.category] ? { ...h, category: renamed[h.category] } : h));
   return e;
 }
 let examplesQueue: Promise<unknown> = Promise.resolve();

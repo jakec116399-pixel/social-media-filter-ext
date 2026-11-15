@@ -8,8 +8,8 @@ const w = (words: string[]) => new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${words.join(
 
 const RULES: Rule[] = [
   {
-    category: "sexualised",
-    reason: "Explicit language",
+    category: "explicit",
+    reason: "Explicit / NSFW language",
     re: w([
       "onlyfans",
       "of link",
@@ -17,7 +17,23 @@ const RULES: Rule[] = [
       "nsfw",
       "🔞",
       "nudes?",
+      "nudity",
       "porn\\w*",
+      "naked",
+      "xxx",
+      "fansly",
+      "sext\\w*",
+      "lewd",
+      "uncensored (?:pics|photos|video|vid|set|version)",
+      "18\\+ (?:only|content|account)",
+      "minors dni",
+      "hentai",
+    ]),
+  },
+  {
+    category: "suggestive",
+    reason: "Suggestive language",
+    re: w([
       "sexy",
       "horny",
       "thirst ?trap",
@@ -25,14 +41,10 @@ const RULES: Rule[] = [
       "boobs?",
       "titties",
       "booty",
-      "naked",
-      "xxx",
+      "milf",
       "spicy (?:content|pics)",
       "dm (?:me )?for (?:more|pics)",
-      "fansly",
-      "milf",
-      "sext\\w*",
-      "lewd",
+      "smash or pass",
       "too (?:hot|spicy|naughty) for (?:here|this app|twitter|x)",
     ]),
   },
@@ -179,9 +191,10 @@ export function heuristicHits(post: Pick<PostData, "text" | "hasLink" | "hasMedi
   const text = post.text.trim();
   for (const r of RULES) if (r.re.test(text)) hits.push({ category: r.category, reason: r.reason });
 
-  // Suggestive emoji plus creator-promo phrasing ("full set", "link in bio"...).
-  if (!hits.some((h) => h.category === "sexualised") && suggestiveSignals(text)) {
-    hits.unshift({ category: "sexualised", reason: "Suggestive post" });
+  // Suggestive emoji, optionally with adult-creator promo phrasing ("full set", "subscribers"...).
+  const signal = suggestiveSignals(text);
+  if (signal && !hits.some((h) => h.category === signal)) {
+    hits.unshift({ category: signal, reason: signal === "explicit" ? "Adult content promo" : "Suggestive post" });
   }
 
   // Templated / trend-format posts (greentext, POV:, nobody: me:, ...).
@@ -212,10 +225,15 @@ const SUGGESTIVE_EMOJI = /😈|🍑|💦|🥵|😏|🔞|👅|🍆|🫦/gu;
 const PROMO_RE =
   /\b(?:full (?:set|vid(?:eo)?)|unedited|uncensored|link in (?:my )?bio|on my (?:page|other account)|my (?:dms?|page)|subscribers?|exclusive content|private (?:pics|photos|content))\b/i;
 
-/** Two or more suggestive emoji, or one alongside creator-promo phrasing. */
-export function suggestiveSignals(text: string): boolean {
+/**
+ * Suggestive emoji plus adult-creator promo phrasing → "explicit" (it's selling
+ * NSFW content); two or more suggestive emoji on their own → "suggestive".
+ */
+export function suggestiveSignals(text: string): "explicit" | "suggestive" | undefined {
   const n = text.match(SUGGESTIVE_EMOJI)?.length ?? 0;
-  return n >= 2 || (n >= 1 && PROMO_RE.test(text));
+  if (n >= 1 && PROMO_RE.test(text)) return "explicit";
+  if (n >= 2) return "suggestive";
+  return undefined;
 }
 
 // Recognisable post templates. Checked on the raw text (line breaks matter).

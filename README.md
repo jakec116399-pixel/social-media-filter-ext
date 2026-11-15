@@ -6,7 +6,7 @@ Every post gets labels in three groups, and you choose which labels hide a post:
 
 | Group | Labels |
 |---|---|
-| **Safety** | Sexualised (text and images) |
+| **Safety** | **Explicit / NSFW**: nudity, porn, explicit text, posts selling or linking to it · **Suggestive**: sexual but not explicit (bikini and thirst-trap pics, suggestive captions, sexualised dancing). Block either or both. |
 | **Topics**: what a post is about | Politics · News & events · Celebrity & gossip · Sports · Film, TV, music & gaming · Memes & humour · Money, crypto & hustle · Tech & science · Learning & education · Health & fitness · Food, travel & lifestyle · Personal updates · Relationships & dating · Ads & promotion |
 | **Tone**: how it's written | Rage bait · Engagement bait · Vagueposting · Doom & negativity · Trend formats ("> be me" greentext, "POV:", "nobody: / me:", "tell me … without telling me", starter packs…) |
 | **Goal mode** | Off-goal: hide anything unrelated to goals you choose (e.g. "Learning to code") |
@@ -80,7 +80,7 @@ X page ──► content script ─── keyword rules (instant) ──► hide
 2. **Blur while checking.** New posts are blurred until judged, so nothing flashes on screen.
 3. **Keywords** (`src/shared/heuristics.ts`). High-precision rules for obvious cases.
 4. **Text AI** (`src/shared/textModel.ts`; example posts in `src/shared/prototypes.ts`). The post is cleaned (links, @mentions and hashtags removed), embedded, and compared with example posts for every label, averaging the 3 closest matches. **Topics compete**: a post's topic is the one it's closest to, so topics nobody hides still give every post a sensible home instead of forcing it into the nearest hidden category. **Tones** are judged separately, against plainly written posts. Long posts are also scored sentence by sentence. Embeddings of the built-in examples are precomputed at build time (`scripts/embed-prototypes.ts`) for fast startup. Your right-click examples are added to the sets.
-5. **Image AI** (`src/engine/engine.ts`, rules in `src/shared/imagePolicy.ts`). NSFWJS MobileNetV2 checks photos and video thumbnails when Sexualised is on. Explicit content (Porn/Hentai) hides at moderate confidence. The broad "Sexy" class only hides at very high confidence, because it also fires on face close-ups and dark frames. Video thumbnails need more confidence, and the post's text is used as context: clearly about another topic means a higher bar, sexualised text means a lower one.
+5. **Image AI** (`src/engine/engine.ts`, rules in `src/shared/imagePolicy.ts`). NSFWJS MobileNetV2 checks photos and video thumbnails when Explicit or Suggestive is on. Its Porn/Hentai scores give **Explicit**, which hides at moderate confidence. Its "Sexy" score gives **Suggestive**, which needs high confidence, because it also fires on face close-ups and dark frames. Video thumbnails need more confidence, and the post's text is used as context: clearly about another topic means a higher bar, sexualised text means a lower one.
 6. **Cache.** Results are cached per post, text and image URL.
 
 ## Development

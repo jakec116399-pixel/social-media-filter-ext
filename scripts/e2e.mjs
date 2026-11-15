@@ -15,7 +15,7 @@ await mkdir(outDir, { recursive: true });
 // Posts NOT in the calibration set, to check the filter generalises.
 const POSTS = [
   { user: "devtips", name: "Dev Tips", text: "Quick tip: use `git stash -p` to stash only part of your changes", expect: "show", goal: true },
-  { user: "spicyacc", name: "🍒", text: "My new photoshoot is too hot for here 🔥 check my bio for the full set", expect: "sexualised" },
+  { user: "spicyacc", name: "🍒", text: "My new photoshoot is too hot for here 🔥 check my bio for the full set", expect: "sexual" },
   { user: "pundit", name: "Political Pundit", text: "The opposition leader's speech in parliament today was a masterclass in hypocrisy", expect: "politics" },
   { user: "lifter", name: "Strong Sam", text: "Finally benched 100kg after 8 months of consistent training 💪", img: "chart.jpg", expect: "show", goal: true },
   { user: "vague", name: "anon", text: "some people really think they're untouchable lol", expect: "vaguepost" },
@@ -32,11 +32,11 @@ const POSTS = [
 
 // Expected label shown on the "Hidden · …" bar for each category.
 const LABEL_TEXT = {
-  sexualised: /Sexualised|Suggestive/, politics: /Politics/, gossip: /Celebrity/, vaguepost: /Vagueposting/,
+  sexual: /Explicit|Suggestive/, politics: /Politics/, gossip: /Celebrity/, vaguepost: /Vagueposting/,
   engagementbait: /Engagement bait/, format: /Trend format/,
 };
 const NONE = Object.fromEntries(
-  ["sexualised", "politics", "news", "gossip", "sports", "entertainment", "memes", "money", "tech", "learning", "fitness",
+  ["explicit", "suggestive", "politics", "news", "gossip", "sports", "entertainment", "memes", "money", "tech", "learning", "fitness",
    "lifestyle", "personal", "relationships", "ads", "ragebait", "engagementbait", "vaguepost", "doom", "offgoal"].map((k) => [k, false]),
 );
 
@@ -77,7 +77,7 @@ async function setSettings(settings) {
 }
 const base = {
   enabled: true, onboarded: true, strictness: "balanced", hideStyle: "collapse", allowAccounts: [], goals: [],
-  categories: { ...NONE, sexualised: true, politics: true, gossip: true, ragebait: true, engagementbait: true, vaguepost: true, format: true },
+  categories: { ...NONE, explicit: true, suggestive: true, politics: true, gossip: true, ragebait: true, engagementbait: true, vaguepost: true, format: true },
 };
 
 async function runFeed(label, settings, expectFn) {
@@ -117,7 +117,7 @@ async function runFeed(label, settings, expectFn) {
 }
 
 // 1) Topic filters on.
-const r1 = await runFeed("Hide: sexualised, politics, gossip, rage/engagement bait, vagueposts", base, (p) => (p.expect === "show" ? "shown" : "hidden"));
+const r1 = await runFeed("Hide: explicit, suggestive, politics, gossip, rage/engagement bait, vagueposts", base, (p) => (p.expect === "show" ? "shown" : "hidden"));
 if (screens) await r1.page.screenshot({ path: join(outDir, "feed-collapse.png"), fullPage: true });
 
 // "Show anyway" reveals the post.
@@ -131,7 +131,7 @@ console.log("  ✓ 'Show anyway' reveals a hidden post");
 {
   const rev = r1.page.locator('article[data-smf="revealed"]').first();
   const noteText = await rev.locator(".smf-note-label").innerText();
-  assert.match(noteText, /^Hidden as /);
+  assert.match(noteText, /^Hidden as (Explicit|Suggestive)/);
   // The line must sit underneath the post, full width (X lays posts out as rows).
   const geo = await rev.evaluate((a) => {
     const n = a.querySelector(".smf-note").getBoundingClientRect();
@@ -201,7 +201,7 @@ const bench = await sw.evaluate(async () => {
         type: "offscreen-classify",
         post: { id: `b${img}${i}`, author: "x", text: "", imageUrls: [`https://pbs.twimg.com/media/${img}?bench=${i}`], hasLink: false, hasMedia: true },
         examples: { hide: [], keep: [] },
-        settings: { enabled: true, strictness: "balanced", goals: [], allowAccounts: [], hideStyle: "collapse", onboarded: true, categories: { sexualised: true } },
+        settings: { enabled: true, strictness: "balanced", goals: [], allowAccounts: [], hideStyle: "collapse", onboarded: true, categories: { explicit: true, suggestive: true } },
       });
       t.push(performance.now() - s);
     }
