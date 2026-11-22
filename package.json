@@ -1,6 +1,6 @@
 {
   "name": "social-media-filter-ext",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "type": "module",
   "description": "Browser extension that filters unwanted and off-goal posts from social media feeds using on-device AI.",

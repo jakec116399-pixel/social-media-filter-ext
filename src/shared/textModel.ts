@@ -319,7 +319,7 @@ export class TextClassifier {
     const vec = (t: string) => this.embedCache.get(cleanText(t));
     this.userHide = ex.hide.flatMap((h) => {
       const v = vec(h.text);
-      return v && (TOPIC_IDS as string[]).concat(TONE_IDS).includes(h.category) ? [{ label: h.category, v }] : [];
+      return v ? [{ label: h.category, v }] : [];
     });
     this.userKeep = ex.keep.flatMap((t) => (vec(t) ? [vec(t)!] : []));
     const b = this.base!;

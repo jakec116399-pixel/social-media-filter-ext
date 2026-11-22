@@ -19,7 +19,9 @@ export type TopicId =
   | "relationships"
   | "ads";
 export type ToneId = "ragebait" | "engagementbait" | "vaguepost" | "doom" | "format";
-export type LabelId = TopicId | ToneId;
+/** Labels detected only by rules (no AI example posts). */
+export type RuleLabelId = "hate";
+export type LabelId = TopicId | ToneId | RuleLabelId;
 /** Anything that can hide a post: a label, or "off-goal" mode. */
 export type Category = LabelId | "offgoal";
 export type LabelGroup = "safety" | "topic" | "tone";
@@ -32,6 +34,12 @@ export interface LabelDef {
 }
 
 export const LABELS: LabelDef[] = [
+  {
+    id: "hate",
+    group: "safety",
+    label: "Hate & slurs",
+    description: "Slurs and hateful language about race, religion, gender, sexuality or disability",
+  },
   {
     id: "explicit",
     group: "safety",
@@ -116,7 +124,8 @@ export const LABELS: LabelDef[] = [
 ];
 
 export const LABEL_BY_ID = Object.fromEntries(LABELS.map((l) => [l.id, l])) as Record<LabelId, LabelDef>;
-export const TOPIC_IDS = LABELS.filter((l) => l.group !== "tone").map((l) => l.id) as TopicId[];
+const RULE_LABELS = new Set<string>(["hate"]);
+export const TOPIC_IDS = LABELS.filter((l) => l.group !== "tone" && !RULE_LABELS.has(l.id)).map((l) => l.id) as TopicId[];
 export const TONE_IDS = LABELS.filter((l) => l.group === "tone").map((l) => l.id) as ToneId[];
 
 export function labelName(id: Category): string {
@@ -147,6 +156,7 @@ export const DEFAULT_SETTINGS: Settings = {
   onboarded: false,
   categories: {
     ...(Object.fromEntries(LABELS.map((l) => [l.id, false])) as Record<LabelId, boolean>),
+    hate: true,
     explicit: true,
     suggestive: true,
     ragebait: true,

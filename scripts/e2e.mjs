@@ -12,6 +12,9 @@ const outDir = join(root, "test-results");
 const screens = process.argv.includes("--screens");
 await mkdir(outDir, { recursive: true });
 
+// ROT13, so this file doesn't spell out the slur used in the hate test post.
+const rot13 = (t) => t.replace(/[a-z]/g, (c) => String.fromCharCode(((c.charCodeAt(0) - 97 + 13) % 26) + 97));
+
 // Posts NOT in the calibration set, to check the filter generalises.
 const POSTS = [
   { user: "devtips", name: "Dev Tips", text: "Quick tip: use `git stash -p` to stash only part of your changes", expect: "show", goal: true },
@@ -27,16 +30,17 @@ const POSTS = [
   { user: "news", name: "Politics Now", text: "Polls tighten as both candidates make their final push before Tuesday's vote", expect: "politics" },
   { user: "foodie", name: "Weeknight Cook", text: "15 minute chickpea curry, recipe in the replies", expect: "show", goal: false },
   { user: "greentext", name: "Kirill", text: "> be Lauren Tan\n> build Grok Bot\n> spend 6 months setting rules your AI can't break\n> ship 3,000 updates in one month", expect: "format", goal: true },
+  { user: "edgy", name: "edgy", text: `GTA is ${rot13("avttre")} coded`, expect: "hate", skipOffgoal: true }, // "coded" looks like the coding goal
   { user: "drama", name: "Tea Spill", text: "This influencer's fake apology video is getting ratioed into oblivion", expect: "gossip" },
 ];
 
 // Expected label shown on the "Hidden · …" bar for each category.
 const LABEL_TEXT = {
   sexual: /Explicit|Suggestive/, politics: /Politics/, gossip: /Celebrity/, vaguepost: /Vagueposting/,
-  engagementbait: /Engagement bait/, format: /Trend format/,
+  engagementbait: /Engagement bait/, format: /Trend format/, hate: /Hate/,
 };
 const NONE = Object.fromEntries(
-  ["explicit", "suggestive", "politics", "news", "gossip", "sports", "entertainment", "memes", "money", "tech", "learning", "fitness",
+  ["hate", "explicit", "suggestive", "politics", "news", "gossip", "sports", "entertainment", "memes", "money", "tech", "learning", "fitness",
    "lifestyle", "personal", "relationships", "ads", "ragebait", "engagementbait", "vaguepost", "doom", "offgoal"].map((k) => [k, false]),
 );
 
@@ -77,7 +81,7 @@ async function setSettings(settings) {
 }
 const base = {
   enabled: true, onboarded: true, strictness: "balanced", hideStyle: "collapse", allowAccounts: [], goals: [],
-  categories: { ...NONE, explicit: true, suggestive: true, politics: true, gossip: true, ragebait: true, engagementbait: true, vaguepost: true, format: true },
+  categories: { ...NONE, hate: true, explicit: true, suggestive: true, politics: true, gossip: true, ragebait: true, engagementbait: true, vaguepost: true, format: true },
 };
 
 async function runFeed(label, settings, expectFn) {
@@ -108,7 +112,7 @@ async function runFeed(label, settings, expectFn) {
     // When hidden for a topic/tone, the bar must name the right label.
     const labelOk =
       got !== "hidden" || settings.categories.offgoal || !LABEL_TEXT[POSTS[i].expect] || LABEL_TEXT[POSTS[i].expect].test(r.reason);
-    const ok = want === got && labelOk;
+    const ok = (want === "any" || want === got) && labelOk;
     if (ok) correct++;
     console.log(`  ${ok ? "✓" : "✗"} ${got.padEnd(6)} ${r.reason.padEnd(38)} ${POSTS[i].text.slice(0, 60)}`);
   });
@@ -117,7 +121,7 @@ async function runFeed(label, settings, expectFn) {
 }
 
 // 1) Topic filters on.
-const r1 = await runFeed("Hide: explicit, suggestive, politics, gossip, rage/engagement bait, vagueposts", base, (p) => (p.expect === "show" ? "shown" : "hidden"));
+const r1 = await runFeed("Hide: hate, explicit, suggestive, politics, gossip, rage/engagement bait, vagueposts", base, (p) => (p.expect === "show" ? "shown" : "hidden"));
 if (screens) await r1.page.screenshot({ path: join(outDir, "feed-collapse.png"), fullPage: true });
 
 // "Show anyway" reveals the post.
@@ -243,7 +247,7 @@ await r1.page.close();
 const r2 = await runFeed(
   "Off-goal only, goals: Learning to code + Fitness & strength",
   { ...base, categories: { ...NONE, offgoal: true }, goals: ["Learning to code", "Fitness & strength"] },
-  (p) => (p.goal ? "shown" : "hidden"),
+  (p) => (p.skipOffgoal ? "any" : p.goal ? "shown" : "hidden"),
 );
 await r2.page.close();
 

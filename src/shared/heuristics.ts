@@ -1,5 +1,6 @@
 // Keyword / pattern checks that catch obvious cases with high precision.
 // They add labels on top of what the AI model finds.
+import { containsSlur, normalizeHomoglyphs } from "./hate.ts";
 import type { LabelId, PostData } from "./types.ts";
 
 type Rule = { category: LabelId; re: RegExp; reason: string };
@@ -196,7 +197,9 @@ export interface HeuristicHit {
 
 export function heuristicHits(post: Pick<PostData, "text" | "hasLink" | "hasMedia">): HeuristicHit[] {
   const hits: HeuristicHit[] = [];
-  const text = post.text.trim();
+  // Undo look-alike letters (e.g. Cyrillic "а") used to dodge filters.
+  const text = normalizeHomoglyphs(post.text.trim());
+  if (containsSlur(text)) hits.push({ category: "hate", reason: "Slur" });
   for (const r of RULES) if (r.re.test(text)) hits.push({ category: r.category, reason: r.reason });
 
   // Suggestive emoji, optionally with adult-creator promo phrasing ("full set", "subscribers"...).
