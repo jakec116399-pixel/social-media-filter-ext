@@ -276,6 +276,26 @@ await p4.close();
   await p5.close();
 }
 
+// Settings page lists taught examples and can remove one.
+{
+  await sw.evaluate(() =>
+    chrome.storage.local.set({
+      examples: { hide: [{ category: "doom", text: "Tom Sykes hits a nine-darter!!" }, { category: "politics", text: "The senate vote" }], keep: ["Is there a thinker behind the thought?"] },
+    }),
+  );
+  const opt = await ctx.newPage();
+  await opt.goto(`chrome-extension://${extId}/options.html`);
+  await opt.waitForFunction(() => document.querySelectorAll("#taught-list li").length === 3);
+  await opt.locator("#taught-list li", { hasText: "nine-darter" }).locator("button").click();
+  await opt.waitForFunction(() => document.querySelectorAll("#taught-list li").length === 2);
+  const ex = await sw.evaluate(() => chrome.storage.local.get("examples"));
+  assert.deepEqual(ex.examples.hide.map((h) => h.category), ["politics"]);
+  if (screens) await opt.locator("#taught-list").screenshot({ path: join(outDir, "taught-list.png") });
+  console.log("  ✓ Settings page lists taught examples and Remove deletes one");
+  await sw.evaluate(() => chrome.storage.local.remove("examples"));
+  await opt.close();
+}
+
 if (screens) {
   await setSettings({ ...base, onboarded: false, goals: ["Learning to code"], categories: { ...base.categories, offgoal: true } });
   const opt = await ctx.newPage();

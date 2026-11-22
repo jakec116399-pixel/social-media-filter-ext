@@ -97,7 +97,8 @@ async function buildReport(backend: Backend): Promise<string> {
         avgImageMs: engine.imagesChecked ? Math.round(engine.imageMs / engine.imagesChecked) : null,
       },
       taught: await getExamples(),
-      decisions: l.slice(-150).map(({ id: _id, ...d }) => d),
+      // Latest decision per post (posts are re-checked after teaching / settings changes).
+      decisions: [...new Map(l.map((d) => [d.id, d])).values()].slice(-150).map(({ id: _id, ...d }) => d),
     },
     null,
     1,
@@ -233,6 +234,9 @@ export function startBackground(backend: Backend): void {
       case "teach":
         teach(msg.post, msg.action, msg.label, msg.enable).then(() => sendResponse(true));
         return true;
+      case "examples-edited":
+        void broadcastRescan();
+        return false;
       case "engine-info":
         backend.info().then(sendResponse, () => sendResponse(undefined));
         return true;

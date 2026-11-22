@@ -52,6 +52,12 @@
       .saved.show { opacity: 1; }
       textarea { min-height: 70px; margin-top: 12px; }
       .lock { margin-top: 14px; }
+      .taught { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; max-height: 360px; overflow: auto; }
+      .taught li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
+      .taught .tag { flex: none; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); white-space: nowrap; }
+      .taught .tag.keep { background: rgba(16, 185, 129, 0.14); }
+      .taught .txt { flex: 1; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+      .taught button { flex: none; padding: 2px 10px; font-size: 12px; }
       .perm { border-color: var(--accent); background: var(--accent-soft); }
     </style>
   </head>
@@ -139,6 +145,13 @@
           <label><input type="radio" name="hideStyle" value="blur" />Cover in place</label>
         </div>
         <p class="hint muted">Either way you can tap “Show anyway”.</p>
+      </section>
+
+      <section class="card">
+        <h2>What you've taught</h2>
+        <p class="muted">Posts you marked with ✓ / ✗ or the right-click menu. Each one pulls similar posts towards its label, so remove any that were mistakes. Changes apply straight away.</p>
+        <ul class="taught" id="taught-list"></ul>
+        <p class="muted" id="taught-empty">Nothing yet. Right-click a post on X → Focus Feed, or use ✓ / ✗ on a post you chose to show.</p>
       </section>
 
       <section class="card">

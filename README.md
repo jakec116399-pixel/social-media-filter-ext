@@ -98,20 +98,19 @@ X page ──► content script ─── keyword rules (instant) ──► hide
 
 ### Current accuracy (balanced setting)
 
-Measured with `npm run eval` on posts that were **not** used to write the examples:
+Measured with `npm run eval` (`-- --mistakes`, `--grid`, `--sweep` for detail):
 
-| | `realistic-posts.json` (58 messy posts) | `topic-posts.json` (78 posts, all topics) |
-|---|---|---|
-| Closest topic correct | 84% | 89% |
-| Typical user* — unwanted posts hidden | 31/34 | 17/20 |
-| Typical user* — good posts wrongly hidden | 2/24 | 2/58 |
-| Tones found / false tone labels | 11/15 / 3 | 8/12 / 6 |
+| Test set | Closest topic right | Unwanted posts hidden | Good posts wrongly hidden |
+|---|---|---|---|
+| `realistic-posts.json` (58 hand-written messy posts) | 86% | 29/34 | 1/24 |
+| `topic-posts.json` (104 posts, all topics) | 91% | 21/27 | 3/77 |
+| Real feed sample (72 posts, private, not in the repo) | 54% | 20/27 | 6/45 |
 
-\*Hides sexualised, politics, gossip, rage bait, engagement bait and vagueposting.
-
-Tone is harder than topic: rage bait in particular is often missed. Both sets are small and hand-written, so real feeds will be harder. Teaching by right-click is the main way to fix your specific feed.
+**Real feeds are much harder than hand-written posts.** Slang, in-jokes and quote-tweets push the closest-topic rate from about 90% down to about 54%. Thresholds are therefore tuned partly on the real sample. The next big step is a classifier trained on real posts (see below). To evaluate on your own feed, save labelled posts to `tests/data/private/real-feed.json` (gitignored); `npm run eval` picks it up.
 
 ## Known limitations
+
+- **Accuracy on real feeds is moderate** (see above). Teaching by right-click and ✓/✗ is the main way to fix your own feed; the settings page lists everything you taught, so mistakes can be removed.
 
 - **Desktop Firefox and Chrome-family browsers.** Firefox runs the AI in its background page; Chrome uses an offscreen document. Firefox for Android supports extensions too, but this hasn't been tested there.
 - **Video** is judged by its thumbnail, not its frames.

@@ -12,6 +12,11 @@ const MODELS = [
   },
 ];
 
+// Extra model ids can be passed on the command line (for comparing models).
+for (const id of process.argv.slice(2)) {
+  MODELS.push({ id, revision: "main", files: ["config.json", "tokenizer.json", "tokenizer_config.json", "onnx/model_quantized.onnx"] });
+}
+
 const root = join(import.meta.dirname, "..", "public", "models");
 
 for (const model of MODELS) {

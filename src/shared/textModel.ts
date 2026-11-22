@@ -39,11 +39,13 @@ export interface Thresholds {
   goalRelevance: number;
 }
 
-// Calibrated with `npm run eval -- --sweep` on tests/data/*.json.
+// Calibrated with `npm run eval -- --sweep / --grid` on tests/data/*.json, including
+// (privately) posts from a real feed, where topic scores run much lower than on
+// hand-written examples.
 export const THRESHOLDS: Record<Strictness, Thresholds> = {
   relaxed: {
-    topicLead: 0.03,
-    topicFloor: 0.25,
+    topicLead: 0.02,
+    topicFloor: 0.34,
     sexualLead: 0.08,
     sexualFloor: 0.32,
     tone: { ragebait: 0.13, engagementbait: 0.13, vaguepost: 0.15, doom: 0.15, format: 0.15 },
@@ -51,15 +53,15 @@ export const THRESHOLDS: Record<Strictness, Thresholds> = {
   },
   balanced: {
     topicLead: 0.0,
-    topicFloor: 0.22,
+    topicFloor: 0.3,
     sexualLead: 0.05,
     sexualFloor: 0.3,
     tone: { ragebait: 0.1, engagementbait: 0.1, vaguepost: 0.12, doom: 0.12, format: 0.1 },
     goalRelevance: 0.24,
   },
   strict: {
-    topicLead: -0.02,
-    topicFloor: 0.2,
+    topicLead: -0.01,
+    topicFloor: 0.26,
     sexualLead: 0.02,
     sexualFloor: 0.27,
     tone: { ragebait: 0.07, engagementbait: 0.07, vaguepost: 0.09, doom: 0.09, format: 0.09 },
@@ -356,9 +358,11 @@ export class TextClassifier {
     vecs.forEach((v, segIndex) => {
       const sims = TOPIC_IDS.map((t) => topKSim(v, sets.topic[t]));
       for (let i = 0; i < TOPIC_IDS.length; i++) {
-        // Sexual labels are judged on the whole post only: short fragments like
-        // "full details at the link" or "anyone get photos?" look like adult promos.
-        if (segIndex > 0 && SEXUAL.has(TOPIC_IDS[i])) continue;
+        // Topics are judged on the whole post only. Single sentences gave
+        // spurious labels on real feeds (e.g. "full details at the link" looking
+        // like an adult promo, a football post's last line looking like gossip).
+        // Sentences are still used for tones (rage bait in one line counts).
+        if (segIndex > 0) continue;
         // Explicit and suggestive are siblings: each is compared with the best
         // non-sexual topic, not with each other (decideText keeps the stronger).
         const sexual = SEXUAL.has(TOPIC_IDS[i]);

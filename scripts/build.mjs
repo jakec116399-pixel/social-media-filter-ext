@@ -53,7 +53,18 @@ for (const target of targets) {
     external: ["fs", "path", "url", "sharp", "onnxruntime-node", "node:*"],
   });
 
-  await cp(join(root, "public"), dist, { recursive: true });
+  // Copy static files, but only the model the extension uses (public/models may
+  // also hold models downloaded for comparison with `npm run eval`).
+  const SHIPPED_MODEL = "Xenova/all-MiniLM-L6-v2";
+  await cp(join(root, "public"), dist, {
+    recursive: true,
+    filter: (src) => {
+      const rel = src.slice(join(root, "public").length).replaceAll("\\", "/");
+      if (!rel.startsWith("/models/")) return true;
+      const id = rel.slice("/models/".length);
+      return SHIPPED_MODEL.startsWith(id) || id.startsWith(SHIPPED_MODEL);
+    },
+  });
   const ort = join(root, "node_modules/onnxruntime-web/dist");
   await mkdir(join(dist, "ort"), { recursive: true });
   for (const f of ["ort-wasm-simd-threaded.asyncify.mjs", "ort-wasm-simd-threaded.asyncify.wasm"]) {

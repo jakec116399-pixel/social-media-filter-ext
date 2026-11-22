@@ -1,7 +1,15 @@
 import { ext } from "../shared/ext";
 import { getSettings, saveSettings } from "../shared/settings";
 import { GOAL_PRESETS } from "../shared/textModel";
-import { LABELS, type Category, type LabelGroup, type Settings, type Strictness } from "../shared/types";
+import {
+  LABELS,
+  labelName,
+  type Category,
+  type LabelGroup,
+  type Settings,
+  type Strictness,
+  type UserExamples,
+} from "../shared/types";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const onboarding = new URLSearchParams(location.search).has("onboarding");
@@ -158,3 +166,42 @@ async function showPerf() {
     ? `Image checks use your graphics chip (~${avg} ms per image).`
     : `⚠ Image checks are running on the processor without graphics acceleration (~${avg} ms per image). This is slow and can make your computer warm; consider turning them off.`;
 }
+
+// ---- What you've taught ----
+async function renderTaught() {
+  const { examples } = (await ext.storage.local.get("examples")) as { examples?: UserExamples };
+  const ex: UserExamples = { hide: [], keep: [], ...examples };
+  const rows = [
+    ...ex.hide.map((h, i) => ({
+      tag: `Hide · ${labelName(h.category)}`,
+      keep: false,
+      text: h.text,
+      remove: () => ex.hide.splice(i, 1),
+    })),
+    ...ex.keep.map((k, i) => ({ tag: "Don't hide", keep: true, text: k, remove: () => ex.keep.splice(i, 1) })),
+  ].reverse(); // newest first
+  $("taught-empty").hidden = rows.length > 0;
+  $("taught-list").replaceChildren(
+    ...rows.map((r) => {
+      const li = document.createElement("li");
+      const tag = document.createElement("span");
+      tag.className = `tag${r.keep ? " keep" : ""}`;
+      tag.textContent = r.tag;
+      const txt = document.createElement("span");
+      txt.className = "txt";
+      txt.textContent = r.text.length > 220 ? r.text.slice(0, 220) + "…" : r.text;
+      const del = document.createElement("button");
+      del.type = "button";
+      del.textContent = "Remove";
+      del.addEventListener("click", async () => {
+        r.remove();
+        await ext.storage.local.set({ examples: ex });
+        ext.runtime.sendMessage({ type: "examples-edited" }).catch(() => {});
+        void renderTaught();
+      });
+      li.append(tag, txt, del);
+      return li;
+    }),
+  );
+}
+void renderTaught();

@@ -222,6 +222,7 @@ export type Msg =
   | { type: "get-report" }
   | { type: "engine-info" }
   | { type: "clear-learning" }
+  | { type: "examples-edited" }
   | { type: "feedback-collect" }
   | { type: "teach"; post: PostData; action: "hide" | "keep"; label?: LabelId; enable?: boolean }
   | { type: "rescan" }
