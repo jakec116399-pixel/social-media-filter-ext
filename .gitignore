@@ -6,3 +6,5 @@ test-results/
 .e2e-profile/
 public/prototype-vectors.json
 tests/data/private/
+training/data/
+training/out/

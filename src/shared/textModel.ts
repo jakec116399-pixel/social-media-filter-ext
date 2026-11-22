@@ -10,6 +10,7 @@
 //    post is to, say, rage-bait examples than to plainly written posts.
 // Posts are cleaned (links, @mentions, hashtags), and long posts are also
 // scored sentence by sentence. No per-post API calls.
+import { HEAD_TOPICS, headProbs, type HeadClass, type TopicHead } from "./head.ts";
 import { PLAIN, TONE_PROTOTYPES, TOPIC_PROTOTYPES } from "./prototypes.ts";
 import {
   TONE_IDS,
@@ -37,6 +38,14 @@ export interface Thresholds {
   tone: Record<ToneId, number>;
   /** Off-goal: hide if relevance to every goal is below this. */
   goalRelevance: number;
+  /** Trained classifier: a topic counts if its probability is at least this... */
+  headProb: number;
+  /** ...and within this of the classifier's top topic (0 = top topic only). */
+  headMargin: number;
+  /** Veto: if the classifier is this sure of another topic, weak topic labels are dropped. */
+  headVeto: number;
+  /** A post at least this similar to one the user taught gets that label. */
+  taughtSim: number;
 }
 
 // Calibrated with `npm run eval -- --sweep / --grid` on tests/data/*.json, including
@@ -50,6 +59,10 @@ export const THRESHOLDS: Record<Strictness, Thresholds> = {
     sexualFloor: 0.32,
     tone: { ragebait: 0.13, engagementbait: 0.13, vaguepost: 0.15, doom: 0.15, format: 0.15 },
     goalRelevance: 0.2,
+    headProb: 0.7,
+    headVeto: 0.9,
+    headMargin: 0,
+    taughtSim: 0.78,
   },
   balanced: {
     topicLead: 0.0,
@@ -58,6 +71,10 @@ export const THRESHOLDS: Record<Strictness, Thresholds> = {
     sexualFloor: 0.3,
     tone: { ragebait: 0.1, engagementbait: 0.1, vaguepost: 0.12, doom: 0.12, format: 0.1 },
     goalRelevance: 0.24,
+    headProb: 0.7,
+    headVeto: 0.8,
+    headMargin: 0,
+    taughtSim: 0.72,
   },
   strict: {
     topicLead: -0.01,
@@ -66,6 +83,10 @@ export const THRESHOLDS: Record<Strictness, Thresholds> = {
     sexualFloor: 0.27,
     tone: { ragebait: 0.07, engagementbait: 0.07, vaguepost: 0.09, doom: 0.09, format: 0.09 },
     goalRelevance: 0.28,
+    headProb: 0.35,
+    headVeto: 0.85,
+    headMargin: 0.1,
+    taughtSim: 0.66,
   },
 };
 
@@ -249,6 +270,10 @@ export interface TextScores {
   goalRelevance?: number;
   /** Near-duplicate of a post the user taught: hide (with label) or keep. */
   taught?: { action: "hide"; label: LabelId } | { action: "keep" };
+  /** Trained classifier probabilities (when a head is loaded). */
+  head?: Record<HeadClass, number>;
+  /** Highest similarity to the user's taught examples, per label. */
+  taughtSim?: Partial<Record<LabelId, number>>;
 }
 
 type VecSets = { topic: Record<TopicId, Float32Array[]>; tone: Record<ToneId, Float32Array[]>; plain: Float32Array[] };
@@ -269,8 +294,11 @@ export class TextClassifier {
    * @param precomputed embeddings computed at build time (scripts/embed-prototypes.ts),
    *   so startup doesn't have to embed hundreds of example posts.
    */
-  constructor(embed: EmbedFn, precomputed?: Map<string, Float32Array>) {
+  private head?: TopicHead;
+
+  constructor(embed: EmbedFn, precomputed?: Map<string, Float32Array>, head?: TopicHead) {
     this.embed = embed;
+    this.head = head;
     if (precomputed) for (const [t, v] of precomputed) this.embedCache.set(t, v);
   }
 
@@ -404,7 +432,10 @@ export class TextClassifier {
       const gv = await this.goalVecs(cleanGoals);
       goalRelevance = Math.max(...vecs.map((v) => topKSim(v, gv, 2)));
     }
-    return { topic, tone, goalRelevance, taught };
+    const head = this.head ? headProbs(this.head, vecs[0]) : undefined;
+    const taughtSim: Partial<Record<LabelId, number>> = {};
+    for (const h of this.userHide) taughtSim[h.label] = Math.max(taughtSim[h.label] ?? -1, dot(vecs[0], h.v));
+    return { topic, tone, goalRelevance, taught, head, taughtSim };
   }
 }
 
@@ -416,14 +447,67 @@ export interface TextDecision {
 }
 
 /** Which labels apply at this strictness, and which of them the user hides. */
+/** Our topics from the trained classifier's probabilities (newsSocial split into politics / news). */
+export function headTopics(s: TextScores): Partial<Record<TopicId, number>> {
+  if (!s.head) return {};
+  const h = s.head;
+  const out: Partial<Record<TopicId, number>> = {
+    sports: h.sports,
+    gossip: h.gossip,
+    entertainment: h.entertainment,
+    tech: h.tech,
+    learning: h.learning,
+    fitness: h.fitness,
+    lifestyle: h.lifestyle,
+    personal: h.personal,
+    relationships: h.relationships,
+  };
+  // The training data lumps news and politics together; the example posts decide which.
+  const political = s.topic.politics.sim >= s.topic.news.sim;
+  out[political ? "politics" : "news"] = h.newsSocial;
+  out[political ? "news" : "politics"] = 0;
+  return out;
+}
+
+const NEEDS_AGREEMENT = new Set<TopicId>(["gossip", "politics"]);
+const HEAD_MODE: "veto" | "replace" = globalThis.process?.env?.FF_HEADMODE === "replace" ? "replace" : "veto";
+const AGREE_OFFSET = 0;
+
 export function decideText(s: TextScores, enabled: Record<Category, boolean>, strictness: Strictness): TextDecision {
   const t = THRESHOLDS[strictness];
   const found: { id: LabelId; strength: number }[] = [];
+  const fromHead = headTopics(s);
+  const headTop = Math.max(0, ...Object.values(fromHead).map((p) => p ?? 0));
   for (const id of TOPIC_IDS) {
+    if (s.head && HEAD_MODE === "replace" && HEAD_TOPICS.includes(id)) {
+      // Trained classifier decides this topic: it must be the classifier's top
+      // pick (or within headMargin of it) and reach headProb.
+      const p = fromHead[id] ?? 0;
+      // Gossip and politics mean something narrower to us than to the training
+      // data ("any famous person" / "any social issue"), so the example posts
+      // must agree too.
+      const agrees = !NEEDS_AGREEMENT.has(id) || s.topic[id].sim >= t.topicFloor + AGREE_OFFSET;
+      if (p >= t.headProb && p >= headTop - t.headMargin && agrees) found.push({ id, strength: p });
+      continue;
+    }
     const { sim, lead } = s.topic[id];
     const sexual = SEXUAL.has(id);
     const [needLead, needFloor] = sexual ? [t.sexualLead, t.sexualFloor] : [t.topicLead, t.topicFloor];
-    if (lead >= needLead && sim >= needFloor) found.push({ id, strength: lead + 0.1 });
+    if (lead >= needLead && sim >= needFloor) found.push({ id, strength: lead + 0.5 });
+  }
+  if (s.head && HEAD_MODE === "veto") {
+    // The trained classifier is better at telling what a post is about. If it is
+    // confident the post is about a different topic, drop topic labels that came
+    // only from (weaker) example-post matching. Safety labels are never vetoed.
+    const topId = (Object.entries(fromHead) as [TopicId, number][]).sort((a, b) => b[1] - a[1])[0];
+    if (topId && topId[1] >= t.headVeto) {
+      for (let i = found.length - 1; i >= 0; i--) {
+        const f = found[i];
+        if (f.id === topId[0] || SEXUAL.has(f.id as TopicId)) continue;
+        const pOwn = (fromHead as Record<string, number>)[f.id];
+        if (pOwn === undefined || pOwn < 0.3) found.splice(i, 1);
+      }
+    }
   }
   // Only the stronger of explicit / suggestive is kept.
   const ex = found.find((f) => f.id === "explicit");
@@ -431,6 +515,10 @@ export function decideText(s: TextScores, enabled: Record<Category, boolean>, st
   if (ex && su) found.splice(found.indexOf(s.topic.explicit.sim >= s.topic.suggestive.sim ? su : ex), 1);
   for (const id of TONE_IDS) {
     if (s.tone[id] >= t.tone[id]) found.push({ id, strength: s.tone[id] - t.tone[id] });
+  }
+  // Posts similar to ones the user taught get those labels (personal learning).
+  for (const [id, sim] of Object.entries(s.taughtSim ?? {}) as [LabelId, number][]) {
+    if (sim >= t.taughtSim && !found.some((f) => f.id === id)) found.push({ id, strength: sim });
   }
   if (s.taught?.action === "hide" && !found.some((f) => f.id === (s.taught as { label: LabelId }).label)) {
     found.unshift({ id: s.taught.label, strength: 1 });
@@ -447,6 +535,18 @@ export function decideText(s: TextScores, enabled: Record<Category, boolean>, st
 
 /** The post's single closest topic (for display and evaluation). */
 export function topTopic(s: TextScores): TopicId {
+  if (s.head) {
+    // Example-post topics the classifier doesn't cover win only if clearly ahead.
+    for (const id of TOPIC_IDS) {
+      if (HEAD_TOPICS.includes(id)) continue;
+      const need = SEXUAL.has(id) ? THRESHOLDS.balanced.sexualLead : 0.03;
+      if (s.topic[id].lead >= need && s.topic[id].sim >= THRESHOLDS.balanced.topicFloor) return id;
+    }
+    const h = headTopics(s);
+    let best: TopicId = "personal";
+    for (const [id, p] of Object.entries(h) as [TopicId, number][]) if (p > (h[best] ?? -1)) best = id;
+    return best;
+  }
   let best = TOPIC_IDS[0];
   for (const t of TOPIC_IDS) if (s.topic[t].sim > s.topic[best].sim) best = t;
   return best;

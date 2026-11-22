@@ -108,6 +108,21 @@ Measured with `npm run eval` (`-- --mistakes`, `--grid`, `--sweep` for detail):
 
 **Real feeds are much harder than hand-written posts.** Slang, in-jokes and quote-tweets push the closest-topic rate from about 90% down to about 54%. Thresholds are therefore tuned partly on the real sample. The next big step is a classifier trained on real posts (see below). To evaluate on your own feed, save labelled posts to `tests/data/private/real-feed.json` (gitignored); `npm run eval` picks it up.
 
+## Training experiments
+
+`training/train-head.ts` (`npm run train`) trains a small classifier ("head", about 40 KB of weights) on top of the extension's sentence embeddings. The extension can use one (`TextClassifier` accepts it; `FF_HEAD=path npm run eval` tests one), but **none is shipped yet**.
+
+First experiment: TweetTopic, about 7,000 real tweets with 19 topics (research licence "other"; data downloaded to `training/data/`, gitignored).
+
+| | Example posts only (shipped) | + TweetTopic classifier |
+|---|---|---|
+| Held-out TweetTopic tweets, top topic right | – | 85.6% |
+| Real feed sample, closest topic right | 54% | 62% |
+| Real feed sample, unwanted posts hidden | 23/28 | 21–23/28 (no gain) |
+| Real feed sample, good posts wrongly hidden | 6/44 | 6–18/44 (no gain) |
+
+It names topics better, but doesn't improve what gets hidden. TweetTopic's labels mean something different from ours ("celebrity & pop culture" is any famous person, not gossip; "news & social concern" includes crime), it has no tones, and most remaining mistakes on real feeds are tone and keyword mistakes. **Next:** the same pipeline with training data written to Focus Feed's own label definitions, including tones, plus the user's own corrections.
+
 ## Known limitations
 
 - **Accuracy on real feeds is moderate** (see above). Teaching by right-click and ✓/✗ is the main way to fix your own feed; the settings page lists everything you taught, so mistakes can be removed.

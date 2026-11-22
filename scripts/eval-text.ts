@@ -34,12 +34,16 @@ const only = process.argv.find((a) => a.startsWith("--set="))?.slice(6);
 const MODEL = process.env.FF_MODEL || "Xenova/all-MiniLM-L6-v2";
 const extractor = await pipeline("feature-extraction", MODEL, { dtype: "q8" });
 console.log(`Model: ${MODEL}`);
+// Optional trained topic classifier (see training/train-head.ts): FF_HEAD=path/to/head.json
+const headPath = process.env.FF_HEAD;
+const head = headPath && existsSync(headPath) ? JSON.parse(readFileSync(headPath, "utf8")) : undefined;
+console.log(head ? `Trained classifier: ${headPath}` : "No trained classifier (example posts only)");
 const clf = new TextClassifier(async (texts) => {
   const out = await extractor(texts, { pooling: (process.env.FF_POOLING as "mean" | "cls") || "mean", normalize: true });
   const dim = out.dims[1];
   const flat = out.data as Float32Array;
   return texts.map((_, i) => flat.slice(i * dim, (i + 1) * dim));
-});
+}, undefined, head);
 await clf.init();
 
 const none = Object.fromEntries([...TOPIC_IDS, ...TONE_IDS, "offgoal"].map((k) => [k, false])) as Record<Category, boolean>;
@@ -184,6 +188,33 @@ if (process.argv.includes("--grid")) {
         return `caught ${c}/${u}, false ${f}/${w}`.padEnd(26);
       });
       console.log(`${lead.toFixed(2)}  ${floor.toFixed(2)}  | ${cells.join(" | ")}`);
+    }
+  }
+  Object.assign(THRESHOLDS.balanced, base);
+}
+
+if (process.argv.includes("--headgrid")) {
+  const all = [];
+  for (const set of sets) {
+    const scored = [];
+    for (const p of set.posts) scored.push({ p, s: await clf.score(p.text, set.goals) });
+    all.push({ set, scored });
+  }
+  const base = { ...THRESHOLDS.balanced };
+  console.log("prob  margin | " + all.map((a) => a.set.name.padEnd(26)).join(" | "));
+  for (const prob of [0.5, 0.6, 0.7, 0.8, 0.9, 0.95]) {
+    for (const margin of [0]) {
+      Object.assign(THRESHOLDS.balanced, { ...base, headProb: prob, headMargin: margin, headVeto: prob });
+      const cells = all.map(({ set, scored }) => {
+        HIDE_NOW = set.hide ?? HIDE;
+        let c = 0, u = 0, f = 0, w = 0;
+        for (const { p, s } of scored) {
+          const hidden = [...labelsFor(p, s, "balanced")].some((l) => HIDE_NOW.has(l));
+          if (shouldHide(p)) { u++; if (hidden) c++; } else { w++; if (hidden) f++; }
+        }
+        return `caught ${c}/${u}, false ${f}/${w}`.padEnd(26);
+      });
+      console.log(`${prob.toFixed(2)}  ${margin.toFixed(2)}   | ${cells.join(" | ")}`);
     }
   }
   Object.assign(THRESHOLDS.balanced, base);

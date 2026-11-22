@@ -148,3 +148,10 @@ test("trend formats", async () => {
   for (const t of no) assert.equal(trendFormat(t), undefined, t);
   assert.ok(cats("> be me\n> forget my keys again").includes("format"));
 });
+
+test("posts similar to a taught example get its label (not just near-duplicates)", () => {
+  const s = { ...scores({ sports: 0.5 }), taughtSim: { politics: 0.75 } };
+  assert.ok(decideText(s, { ...off, politics: true }, "balanced").hiddenBy.includes("politics"));
+  const weak = { ...scores({ sports: 0.5 }), taughtSim: { politics: 0.6 } };
+  assert.equal(decideText(weak, { ...off, politics: true }, "balanced").hiddenBy.length, 0);
+});
